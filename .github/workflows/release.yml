@@ -1,0 +1,105 @@
+name: Release
+
+# 推 v* 标签（如 v1.0.0）自动打包各平台安装包并上传到 Release；
+# 也可以在 Actions 页面手动触发（workflow_dispatch）来试跑。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS 通用包：一个 dmg 同时支持 Intel 与 M 系列芯片
+          - platform: macos-latest
+            label: macOS universal
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
+
+          # Windows 64 位（32 位 Windows 已基本淘汰）
+          - platform: windows-latest
+            label: Windows x64
+            rust-targets: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc
+
+          # Linux 64 位：AppImage + deb
+          - platform: ubuntu-22.04
+            label: Linux x64
+            rust-targets: x86_64-unknown-linux-gnu
+            args: --target x86_64-unknown-linux-gnu
+
+          # Linux ARM64：交叉编译，只出 deb（AppImage 的 linuxdeploy 在跨架构下不可靠）
+          - platform: ubuntu-22.04
+            label: Linux arm64
+            rust-targets: aarch64-unknown-linux-gnu
+            args: --target aarch64-unknown-linux-gnu --bundles deb
+
+    runs-on: ${{ matrix.platform }}
+    name: ${{ matrix.label }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tauri 2 在 Linux 上需要的系统依赖
+      - name: Install Linux deps
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file
+
+      # ARM64 交叉编译需要 aarch64 的 gcc 作为 linker
+      - name: Install arm64 cross toolchain
+        if: matrix.rust-targets == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Install frontend deps
+        run: npm install
+
+      - name: Build and upload to Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: DBMan v__VERSION__
+          releaseBody: |
+            DBMan v__VERSION__ 桌面数据库管理工具。
+
+            各平台安装包见下方 Assets。macOS 为通用包，同时支持 Intel 与 Apple 芯片。
+            官网：https://dbman.tangsanlang.cn/
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

@@ -1,0 +1,50 @@
+[package]
+name = "dbman"
+version = "1.0.0"
+description = "DBMan - 基于 Tauri + Rust 的现代桌面数据库管理工具"
+authors = ["tangsanlang"]
+license = "MIT"
+repository = "https://github.com/usheweb/dbman"
+homepage = "https://dbman.tangsanlang.cn/"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "dbman_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+
+tokio = { version = "1", features = ["net", "io-util", "sync", "rt", "time", "macros"] }
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
+
+# MySQL：文本协议执行任意 SQL（含 SHOW / USE / 多语句），按行返回
+mysql_async = { version = "0.34", default-features = false, features = ["default-rustls"] }
+# Redis：ConnectionManager 内部多路复用，Clone 廉价
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
+# SSH 隧道：纯 Rust 实现，无系统库依赖
+russh = "0.45"
+rand = "0.8"
+# russh::client::Handler 由 #[async_trait] 生成，实现端需同名宏
+async-trait = "0.1"
+# 导出时间戳列时按本地时区格式化
+chrono = { version = "0.4", features = ["clock"] }
+# 大模型 HTTP 客户端：rustls 避免引入 OpenSSL 系统库，保持体积可控
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+encoding_rs = { version = "0.8.35", default-features = false, features = ["alloc"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

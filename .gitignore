@@ -1,0 +1,27 @@
+# ---- Node ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# ---- Rust / Tauri ----
+target/
+**/target/
+
+# ---- 本地数据与密钥（连接配置、密码、AI Key、SQL 日志等，绝不提交）----
+data/
+*.jsonl
+.env
+.env.local
+
+# ---- 本机 cargo 镜像覆盖（仅本地生效，不随仓库分发，避免影响 CI 与其他平台）----
+src-tauri/.cargo/
+
+# ---- 编辑器 / 工具 ----
+.trae/
+.DS_Store
+.idea/
+.vscode/
+*.swp

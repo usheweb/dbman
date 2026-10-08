@@ -1,0 +1,218 @@
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+/// /api/connect 请求体
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConnectRequest {
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub config: DbConfig,
+    /// 前端总是传对象，但旧数据可能传 null，这里容错处理
+    #[serde(default)]
+    pub ssh: Option<SshConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DbConfig {
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub user: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub database: Option<String>,
+    #[serde(default)]
+    pub db: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SshConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default, rename = "privateKey")]
+    pub private_key: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TableInfo {
+    #[serde(rename = "tableName")]
+    pub table_name: String,
+    #[serde(rename = "tableComment")]
+    pub table_comment: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ColumnInfo {
+    #[serde(rename = "columnName")]
+    pub column_name: String,
+    #[serde(rename = "columnComment")]
+    pub column_comment: Option<String>,
+    #[serde(rename = "dataType")]
+    pub data_type: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FieldInfo {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QueryResponse {
+    pub write: bool,
+    pub rows: Vec<serde_json::Value>,
+    pub fields: Vec<FieldInfo>,
+    pub affected: u64,
+    pub paged: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExportColumn {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default, rename = "enumMap")]
+    pub enum_map: Option<HashMap<String, String>>,
+}
+
+/// 表结构设计器用的列定义（information_schema.COLUMNS）
+#[derive(Debug, Clone, Serialize)]
+pub struct ColumnDef {
+    pub name: String,
+    /// COLUMN_TYPE：带 unsigned / 长度 / enum 值，如 varchar(255)、int unsigned
+    #[serde(rename = "columnType")]
+    pub column_type: String,
+    #[serde(rename = "dataType")]
+    pub data_type: String,
+    pub nullable: bool,
+    pub default: Option<String>,
+    #[serde(rename = "columnKey")]
+    pub column_key: Option<String>,
+    /// EXTRA：auto_increment / on update CURRENT_TIMESTAMP / VIRTUAL GENERATED 等
+    pub extra: String,
+    pub comment: Option<String>,
+    pub charset: Option<String>,
+    pub collation: Option<String>,
+    /// 生成列表达式，普通列为 None
+    #[serde(rename = "generationExpression")]
+    pub generation_expression: Option<String>,
+    pub ordinal: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct IndexDef {
+    pub name: String,
+    pub unique: bool,
+    #[serde(rename = "indexType")]
+    pub index_type: String,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForeignKeyDef {
+    pub name: String,
+    pub columns: Vec<String>,
+    #[serde(rename = "refTable")]
+    pub ref_table: String,
+    #[serde(rename = "refColumns")]
+    pub ref_columns: Vec<String>,
+    #[serde(rename = "onDelete")]
+    pub on_delete: String,
+    #[serde(rename = "onUpdate")]
+    pub on_update: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TableOptionDef {
+    pub engine: Option<String>,
+    pub charset: Option<String>,
+    pub collation: Option<String>,
+    pub comment: Option<String>,
+    #[serde(rename = "autoIncrement")]
+    pub auto_increment: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TableStructure {
+    pub columns: Vec<ColumnDef>,
+    pub indexes: Vec<IndexDef>,
+    #[serde(rename = "foreignKeys")]
+    pub foreign_keys: Vec<ForeignKeyDef>,
+    pub options: TableOptionDef,
+}
+
+/// CSV 预览结果：headers 与 rows 均已按列数对齐，前端据此渲染映射表
+#[derive(Debug, Serialize)]
+pub struct CsvPreview {
+    pub headers: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+    #[serde(rename = "totalRows")]
+    pub total_rows: usize,
+    /// 实际用于解码的编码名（auto 模式会回填检测结果）
+    pub encoding: String,
+    /// 实际使用的分隔符（如 "," / "\t"）
+    pub delimiter: String,
+    /// 列数（取所有行中的最大值）
+    pub columns: usize,
+}
+
+/// CSV 导入选项
+#[derive(Debug, Deserialize)]
+pub struct CsvImportOptions {
+    #[serde(rename = "hasHeader")]
+    pub has_header: bool,
+    /// "auto" / "utf-8" / "gbk" / "gb18030"；缺省按 auto 处理
+    pub encoding: Option<String>,
+    /// 分隔符：auto / "," / ";" / "|" / "tab"；缺省自动探测
+    pub delimiter: Option<String>,
+    /// 视为 NULL 的文本（如 "NULL"、"\\N"），空串表示不启用
+    #[serde(rename = "nullValue")]
+    pub null_value: Option<String>,
+    /// 空单元格是否按 NULL 写入
+    #[serde(rename = "emptyAsNull")]
+    pub empty_as_null: Option<bool>,
+    /// 导入前先 TRUNCATE 目标表
+    #[serde(rename = "truncateFirst")]
+    pub truncate_first: Option<bool>,
+    /// 出错时立即中止；false 则跳过坏行继续
+    #[serde(rename = "stopOnError")]
+    pub stop_on_error: Option<bool>,
+    #[serde(rename = "batchSize")]
+    pub batch_size: Option<usize>,
+}
+
+/// CSV 导入结果
+#[derive(Debug, Serialize)]
+pub struct CsvImportResult {
+    pub inserted: u64,
+    pub failed: u64,
+    /// 失败明细（最多保留前 20 条）
+    pub errors: Vec<String>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RedisInfo {
+    pub info: String,
+    pub dbsize: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RedisValue {
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub value: serde_json::Value,
+    pub ttl: i64,
+}

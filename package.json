@@ -1,0 +1,36 @@
+{
+  "name": "dbman-tauri",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DBMan - 基于 Tauri + Rust + Vue 3 的现代桌面数据库管理工具",
+  "license": "MIT",
+  "homepage": "https://dbman.tangsanlang.cn/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/usheweb/dbman.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.1.0",
+    "@fontsource/orbitron": "^5.1.0",
+    "@fontsource/rajdhani": "^5.1.0",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "codemirror": "^5.65.18",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.12"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "vite": "^5.4.11"
+  }
+}
