@@ -34,8 +34,9 @@ jobs:
             rust-targets: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu
 
-          # Linux ARM64：交叉编译，只出 deb（AppImage 的 linuxdeploy 在跨架构下不可靠）
-          - platform: ubuntu-22.04
+          # Linux ARM64：用 GitHub 原生 ARM64 runner，只出 deb（AppImage 的 linuxdeploy 在 arm64 下不可靠）
+          # 注意：不要在 x64 runner 上交叉编译 —— glib-sys / gobject-sys 找不到 arm64 开发库会直接构建失败
+          - platform: ubuntu-24.04-arm
             label: Linux arm64
             rust-targets: aarch64-unknown-linux-gnu
             args: --target aarch64-unknown-linux-gnu --bundles deb
@@ -76,14 +77,6 @@ jobs:
             curl \
             wget \
             file
-
-      # ARM64 交叉编译需要 aarch64 的 gcc 作为 linker
-      - name: Install arm64 cross toolchain
-        if: matrix.rust-targets == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Install frontend deps
         run: npm install
