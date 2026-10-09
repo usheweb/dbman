@@ -99,6 +99,13 @@ function formatElapsed(ms) {
     <div v-if="ai.generating || ai.error || ai.status" class="ai-bar-status" :class="{ 'is-error': !!ai.error }">
       <span v-if="ai.generating" class="ai-spinner"></span>
       <span>{{ statusText }}</span>
+      <!-- 步骤多时一键收起明细，状态文案保留 -->
+      <button
+        v-if="ai.steps.length"
+        class="ai-bar-status-x"
+        title="清空下面的步骤明细"
+        @click="ai.clearSteps()"
+      >×</button>
     </div>
 
     <!-- 每完成一步立刻出现一条，带该步耗时 -->
@@ -229,6 +236,13 @@ function formatElapsed(ms) {
 .ai-bar-status.is-error {
   color: var(--magenta);
 }
+
+/* 状态后的清空按钮：只清步骤明细，做得很轻，不抢视觉 */
+.ai-bar-status-x {
+  padding: 0 2px; background: none; border: none; color: var(--text-dim);
+  font-size: 13px; line-height: 1; cursor: pointer; transition: color .15s;
+}
+.ai-bar-status-x:hover { color: var(--cyan); }
 
 .ai-bar-steps {
   display: flex;

@@ -133,6 +133,11 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
+  // 只清掉步骤明细，状态文案保留（步骤多时用来收拾界面）
+  function clearSteps() {
+    steps.value = [];
+  }
+
   function reset() {
     status.value = '';
     error.value = '';
@@ -147,6 +152,6 @@ export const useAiStore = defineStore('ai', () => {
   return {
     config, generating, status, error, prompt, steps, phase, phaseRound, lastUsage,
     hasSession, turn,
-    init, isConfigured, saveConfig, testConfig, generate, reset
+    init, isConfigured, saveConfig, testConfig, generate, clearSteps, reset
   };
 });
