@@ -92,7 +92,7 @@ jobs:
             DBMan v__VERSION__ 桌面数据库管理工具。
 
             各平台安装包见下方 Assets。macOS 为通用包，同时支持 Intel 与 Apple 芯片。
-            官网：https://dbman.tangsanlang.cn/
+            官网：https://dbman.tangsanlang.com/
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

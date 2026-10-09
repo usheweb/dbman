@@ -5,7 +5,7 @@ description = "DBMan - 基于 Tauri + Rust 的现代桌面数据库管理工具"
 authors = ["tangsanlang"]
 license = "MIT"
 repository = "https://github.com/usheweb/dbman"
-homepage = "https://dbman.tangsanlang.cn/"
+homepage = "https://dbman.tangsanlang.com/"
 edition = "2021"
 rust-version = "1.77"
 
