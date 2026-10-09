@@ -21,7 +21,8 @@ export const useUiStore = defineStore('ui', () => {
     sqlLogModal: false,
     sqlFavModal: false,
     favEditModal: false,
-    aiConfigModal: false
+    aiConfigModal: false,
+    promoModal: false
   });
 
   const toast = ref({ msg: '', type: 'success', visible: false });

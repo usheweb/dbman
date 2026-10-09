@@ -24,6 +24,7 @@ import TableDdlModal from '@/components/modals/TableDdlModal.vue';
 import ExportSqlModal from '@/components/modals/ExportSqlModal.vue';
 import TableDesignerModal from '@/components/modals/TableDesignerModal.vue';
 import CsvImportModal from '@/components/modals/CsvImportModal.vue';
+import PromoModal from '@/components/modals/PromoModal.vue';
 import ToastHost from '@/components/common/ToastHost.vue';
 
 const store = useStoreStore();
@@ -35,6 +36,8 @@ const ai = useAiStore();
 
 // 启动引导：先把本地文件里的数据读进内存，后面的渲染/绑定才有正确的初始状态
 onMounted(async () => {
+  // 每次启动都弹一次「唐三浪学习时钟」推广弹窗（倒计时结束后可关闭）
+  ui.openModal('promoModal');
   await store.load();
   ui.init();
   conn.init();
@@ -73,5 +76,6 @@ onMounted(async () => {
   <ExportSqlModal />
   <TableDesignerModal />
   <CsvImportModal />
+  <PromoModal :visible="ui.modals.promoModal" @close="ui.closeModal('promoModal')" />
   <ToastHost />
 </template>
