@@ -2,7 +2,7 @@
 
 > 一款基于 **Tauri 2 + Rust + Vue 3** 的现代桌面数据库管理工具，把 MySQL 与 Redis 放进同一个工作台。
 
-**官网 / 下载地址：https://dbman.tangsanlang.com/**
+**官网 / 下载地址：http://dbman.tangsanlang.com/**
 
 安装包小、内存占用低、开箱即用，不需要额外安装运行时。
 
@@ -22,7 +22,7 @@
 
 ## 下载
 
-前往官网 **https://dbman.tangsanlang.com/** 或本仓库的
+前往官网 **http://dbman.tangsanlang.com/** 或本仓库的
 [Releases](../../releases) 页面下载对应平台安装包：
 
 - **macOS**：`DBMan_x.y.z_universal.dmg` —— 通用包，同时支持 Intel 与 Apple 芯片，要求 macOS 10.15+
