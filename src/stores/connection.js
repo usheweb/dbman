@@ -172,11 +172,12 @@ export const useConnectionStore = defineStore('connection', () => {
   async function loadMySQLDatabases() {
     const data = await withRetry(id => api.mysqlDatabases(id));
     currentDatabaseList.value = data;
+    // 只有「记住的上次选择」仍然存在时才自动打开它。
+    // 该连接首次使用（或记忆中的库已被删除）时不做任何默认选中——
+    // 以前会兜底打开列表里的第一个库，会把用户的下意识操作带偏。
     const last = connectionDatabases.value[currentConnId.value];
     if (last && data.includes(last)) {
       await selectDatabase(last);
-    } else if (data.length > 0) {
-      await selectDatabase(data[0]);
     }
   }
 

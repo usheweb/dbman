@@ -336,6 +336,51 @@ pub(crate) async fn fetch_columns(
     Ok(out)
 }
 
+/// 查询某库某表某个字段的去重取值，供大模型确认「需求里的词」对应的真实数据值。
+/// 返回 (取值列表, 是否被截断)。
+pub(crate) async fn fetch_distinct_values(
+    conn: &mut Conn,
+    database: &str,
+    table: &str,
+    column: &str,
+    keyword: Option<&str>,
+    limit: usize,
+) -> Result<(Vec<String>, bool), String> {
+    use_database(conn, database).await?;
+    // 标识符沿用项目惯例：反引号加倍后再包裹
+    let t = table.replace('`', "``");
+    let c = column.replace('`', "``");
+    let lim = limit.clamp(1, 100);
+    let mut sql = format!(
+        "SELECT DISTINCT `{c}` FROM `{t}` WHERE `{c}` IS NOT NULL AND `{c}` <> ''"
+    );
+    let mut params: Vec<Value> = Vec::new();
+    if let Some(k) = keyword.filter(|k| !k.is_empty()) {
+        sql.push_str(&format!(" AND `{c}` LIKE ?"));
+        params.push(Value::Bytes(format!("%{}%", k).into_bytes()));
+    }
+    // LIMIT 用受控整数内联（已 clamp，无注入风险），避免驱动对 LIMIT ? 的兼容差异；
+    // 多取 1 条用于判断是否被截断。
+    sql.push_str(&format!(" ORDER BY `{c}` LIMIT {}", lim + 1));
+
+    let mut result = conn
+        .exec_iter(sql, mysql_async::Params::Positional(params))
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut out: Vec<String> = Vec::new();
+    while let Some(row) = result.next().await.map_err(|e| e.to_string())? {
+        if let Some(v) = row.as_ref(0) {
+            // 单值截断到 64 字符，避免超长文本灌进模型上下文
+            let s = json_to_string(&value_to_json(v, false));
+            out.push(s.chars().take(64).collect());
+        }
+    }
+    result.drop_result().await.map_err(|e| e.to_string())?;
+    let truncated = out.len() > lim;
+    out.truncate(lim);
+    Ok((out, truncated))
+}
+
 #[tauri::command]
 pub async fn mysql_databases(
     state: State<'_, AppState>,

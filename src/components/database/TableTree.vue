@@ -61,6 +61,13 @@ const filteredTables = computed(() => {
   });
 });
 
+// 列表上方的数量统计：无过滤词时给全量，有过滤词时给「命中 / 总数」
+const tableCountText = computed(() => {
+  const total = connStore.allTables.length;
+  if (!tokens.value.length) return '共 ' + total + ' 张表';
+  return filteredTables.value.length + ' / ' + total + ' 张表';
+});
+
 async function selectTable(tableName) {
   connStore.currentTable = tableName;
   const cm = connStore.currentDatabase;
@@ -147,6 +154,7 @@ function onMenuSelect(item) {
         :title="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
       >{{ ui.panelState.tree ? '›' : '‹' }}</button>
     </div>
+    <div v-if="connStore.currentDatabase" class="tree-count-row" :title="tableCountText">{{ tableCountText }}</div>
     <div id="tableList">
       <div
         v-for="t in filteredTables"

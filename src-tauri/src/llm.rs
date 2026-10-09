@@ -15,12 +15,18 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::mysql;
-use crate::state::AppState;
+use crate::state::{AiSession, AppState};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
 const DEFAULT_MAX_ROUNDS: u8 = 6;
 /// search_tables 无关键词时最多返回的表数量（超出只给总数）。
 const SEARCH_LIMIT: usize = 50;
+/// 「继续微调」会话的有效期：超期后当作全新会话。
+const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
+/// 同时保留的会话数量上限，超出按最久未使用淘汰。
+const MAX_SESSIONS: usize = 20;
+/// 会话消息裁剪时保留的尾部条数（过长会拖慢请求、浪费 token）。
+const KEEP_TAIL: usize = 8;
 /// 生成过程中的实时进度事件：每完成一步就推一条，前端不必等整轮结束才看到结果。
 const PROGRESS_EVENT: &str = "ai:progress";
 
@@ -31,9 +37,12 @@ const SYSTEM_PROMPT: &str = "\
 
 工作方式（必须遵守）：
 1. 你**看不到**数据库里的任何表名和字段，严禁凭猜测编造表名或列名。
+   用户需求里以 @ 开头的是他指定的表名，请优先使用这些表（仍需用 get_table_columns 取字段）。
 2. 生成 SQL 前，必须先调用 search_tables 找到相关的表；不确定表名时用简短关键词搜索。
 3. 确定候选表后，调用 get_table_columns 获取这些表的真实字段（名称/类型/注释）；只能使用工具返回过的表名与列名。
+   若过滤条件涉及某个字段的具体取值，按第 5 条处理。
 4. 一次需求通常只涉及 1~2 张表，只查询你确实需要用到的表，不要索取全部表结构。
+5. 当需求里的词可能是某张表字段的具体取值（渠道名、市场名、状态名等）时，先调用 distinct_values 查该字段的真实取值，拿到准确值再写过滤条件，不要凭字面猜测。
 
 输出要求：
 1. 只输出一条 SQL 语句本身，不要任何解释文字，不要使用 ``` 代码围栏。
@@ -87,6 +96,23 @@ fn tools_schema() -> Value {
                     "required": ["table"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "distinct_values",
+                "description": "查询某张表某个字段的去重取值（可选关键词模糊过滤），用于确认需求里的词（如渠道名、市场名、状态名）对应的真实数据值，从而写对 WHERE 条件。只返回该字段的取值，不返回其他数据。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table": { "type": "string", "description": "表名，必须是 search_tables 返回过的真实表名" },
+                        "column": { "type": "string", "description": "字段名，必须是 get_table_columns 返回过的真实字段" },
+                        "keyword": { "type": "string", "description": "取值关键词，可留空表示取前若干个值" },
+                        "limit": { "type": "integer", "description": "最多返回多少条，默认 30，最大 100" }
+                    },
+                    "required": ["table", "column"]
+                }
+            }
         }
     ])
 }
@@ -121,6 +147,30 @@ fn clean_sql(raw: &str) -> String {
         }
     }
     text.trim().to_string()
+}
+
+/// 到达轮数上限后不再下发 tools，但模型仍可能把「工具调用」当成正文吐出来，形如
+/// `<｜｜DSML｜｜invoke name="search_tables">…</｜｜DSML｜｜invoke>`。
+/// 这不是 SQL，直接写进编辑器用户只会看到一堆乱码，必须按无效结果拦掉。
+fn looks_like_tool_call(text: &str) -> bool {
+    // "\u{FF5C}" 是全角竖线，在模型特殊标记里成对出现，正常 SQL 不会用到
+    text.contains("DSML") || text.contains("\u{FF5C}\u{FF5C}") || text.contains("invoke name=")
+}
+
+/// 会话消息裁剪：保留 system + 第一条 user（含库名与原始需求），
+/// 尾部最多 KEEP_TAIL 条，且尾部起点必须回退到 role=user 的消息，
+/// 否则可能切断 assistant(tool_calls) 与其 tool 响应的配对。
+fn trim_messages(msgs: &mut Vec<Value>) {
+    if msgs.len() <= 2 + KEEP_TAIL {
+        return;
+    }
+    let mut start = msgs.len() - KEEP_TAIL;
+    while start > 2 && msgs[start].get("role").and_then(|r| r.as_str()) != Some("user") {
+        start -= 1;
+    }
+    let tail: Vec<Value> = msgs[start..].to_vec();
+    msgs.truncate(2);
+    msgs.extend(tail);
 }
 
 fn accumulate_usage(total: &mut Value, resp: &Value) {
@@ -258,6 +308,63 @@ async fn run_tool(
                 ),
             }
         }
+        "distinct_values" => {
+            let get = |k: &str| {
+                args.get(k)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string()
+            };
+            let table = get("table");
+            let column = get("column");
+            if table.is_empty() || column.is_empty() {
+                return (
+                    json!({ "error": "缺少 table 或 column 参数" }).to_string(),
+                    "参数缺失".to_string(),
+                );
+            }
+            let keyword = args
+                .get("keyword")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(30) as usize;
+            let mut guard = conn.lock().await;
+            match mysql::fetch_distinct_values(&mut guard, database, &table, &column, keyword, limit)
+                .await
+            {
+                Ok((values, truncated)) => {
+                    let count = values.len();
+                    let summary = format!(
+                        "表 {} 字段 {} 取到 {} 个值{}",
+                        table,
+                        column,
+                        count,
+                        if truncated { "（已截断）" } else { "" }
+                    );
+                    (
+                        json!({
+                            "table": table,
+                            "column": column,
+                            "keyword": keyword,
+                            "total": count,
+                            "truncated": truncated,
+                            "values": values,
+                        })
+                        .to_string(),
+                        summary,
+                    )
+                }
+                Err(e) => (
+                    json!({ "error": e }).to_string(),
+                    format!("查询表 {} 字段 {} 取值失败", table, column),
+                ),
+            }
+        }
         other => (
             json!({ "error": format!("未知工具：{}", other) }).to_string(),
             "未知工具".to_string(),
@@ -294,8 +401,9 @@ pub async fn ai_test_config(config: AiConfig) -> Result<String, String> {
     Ok("连接成功".to_string())
 }
 
-/// 生成 SQL 的入口命令。返回 { sql, rounds, usage }。
+/// 生成 SQL 的入口命令。返回 { sql, rounds, usage, sessionId, turn, hasSession }。
 /// 生成过程中的每一步通过 `ai:progress` 事件实时推送（前端逐条追加显示）。
+/// continue_session 为 true 时在上一次的会话上下文基础上继续（追问式微调）。
 #[tauri::command]
 pub async fn ai_generate_sql(
     app: AppHandle,
@@ -304,6 +412,7 @@ pub async fn ai_generate_sql(
     database: String,
     prompt: String,
     config: AiConfig,
+    continue_session: Option<bool>,
 ) -> Result<Value, String> {
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
@@ -340,16 +449,55 @@ pub async fn ai_generate_sql(
         mysql::fetch_tables(&mut guard, &database, None).await?.len()
     };
 
-    let mut messages: Vec<Value> = vec![
-        json!({ "role": "system", "content": SYSTEM_PROMPT }),
-        json!({
+    // 追问式微调：按「连接 + 库」保留会话上下文，继续时在其基础上追加一条 user 消息。
+    let key = format!("{}::{}", conn_id, database);
+    let mut turn: u32 = 1;
+    let reused: Option<Vec<Value>> = {
+        let mut sessions = state.ai_sessions.lock().await;
+        // 惰性清理：过期淘汰 + 数量上限（超限删最久未使用的）
+        sessions.retain(|_, s| s.touched.elapsed() < SESSION_TTL);
+        while sessions.len() >= MAX_SESSIONS {
+            let oldest = sessions
+                .iter()
+                .min_by_key(|(_, s)| s.touched)
+                .map(|(k, _)| k.clone());
+            match oldest {
+                Some(k) => {
+                    sessions.remove(&k);
+                }
+                None => break,
+            }
+        }
+        if continue_session.unwrap_or(false) {
+            sessions.get(&key).map(|s| {
+                turn = s.turn + 1;
+                s.messages.clone()
+            })
+        } else {
+            None
+        }
+    };
+
+    let mut messages: Vec<Value> = reused.unwrap_or_default();
+    if messages.is_empty() {
+        messages = vec![
+            json!({ "role": "system", "content": SYSTEM_PROMPT }),
+            json!({
+                "role": "user",
+                "content": format!(
+                    "当前数据库：{}\n该库共有 {} 张表。请通过工具按需查询表结构后生成 SQL。\n\n用户需求：{}",
+                    database, total_tables, prompt
+                )
+            }),
+        ];
+        turn = 1;
+    } else {
+        messages.push(json!({
             "role": "user",
-            "content": format!(
-                "当前数据库：{}\n该库共有 {} 张表。请通过工具按需查询表结构后生成 SQL。\n\n用户需求：{}",
-                database, total_tables, prompt
-            )
-        }),
-    ];
+            "content": format!("用户补充/修正：{}", prompt)
+        }));
+    }
+    trim_messages(&mut messages);
 
     let tools = tools_schema();
     let mut usage = json!({ "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 });
@@ -454,10 +602,29 @@ pub async fn ai_generate_sql(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default(),
         );
-        if cleaned.is_empty() {
-            return Err("大模型未返回可用的 SQL，请调整描述后重试".to_string());
+        // 收回工具后模型有时仍把工具调用当正文吐出来，这种内容不是 SQL，不能写进编辑器
+        if cleaned.is_empty() || looks_like_tool_call(&cleaned) {
+            return Err(if force_answer {
+                format!(
+                    "已达工具调用轮数上限（{} 轮），模型仍未给出 SQL。\
+                     请把需求描述得更具体，或直接写明涉及的表名/字段后重试",
+                    max_rounds
+                )
+            } else {
+                "大模型未返回可用的 SQL，请调整描述后重试".to_string()
+            });
         }
         sql = cleaned;
+        // 把最终答案也留在上下文里，追问时模型知道上一版长什么样
+        messages.push(json!({ "role": "assistant", "content": sql.as_str() }));
+        state.ai_sessions.lock().await.insert(
+            key.clone(),
+            AiSession {
+                messages: messages.clone(),
+                turn,
+                touched: Instant::now(),
+            },
+        );
         break;
     }
 
@@ -465,5 +632,8 @@ pub async fn ai_generate_sql(
         "sql": sql,
         "rounds": rounds,
         "usage": usage,
+        "sessionId": key,
+        "turn": turn,
+        "hasSession": true,
     }))
 }

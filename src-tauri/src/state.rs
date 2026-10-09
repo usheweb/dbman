@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 
 use tokio::sync::Mutex;
 
@@ -13,10 +14,20 @@ pub enum DbConn {
     Redis(redis::aio::ConnectionManager),
 }
 
+/// AI 生成会话：保留上一次生成的完整 messages，支持「继续微调」在其基础上追加。
+/// 只存内存，进程重启即失效。
+pub struct AiSession {
+    pub messages: Vec<serde_json::Value>,
+    pub turn: u32,
+    pub touched: Instant,
+}
+
 pub struct AppState {
     pub connections: Mutex<HashMap<String, DbConn>>,
     pub tunnels: Mutex<HashMap<String, Tunnel>>,
     pub store_dir: PathBuf,
+    /// AI 会话，key = "{conn_id}::{database}"
+    pub ai_sessions: Mutex<HashMap<String, AiSession>>,
 }
 
 impl AppState {
@@ -25,6 +36,7 @@ impl AppState {
             connections: Mutex::new(HashMap::new()),
             tunnels: Mutex::new(HashMap::new()),
             store_dir,
+            ai_sessions: Mutex::new(HashMap::new()),
         }
     }
 

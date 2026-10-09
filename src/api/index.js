@@ -73,8 +73,9 @@ export function redisGet(connId, key) {
 
 // ===== AI：大模型生成 SQL =====
 // config: { baseUrl, apiKey, model, timeoutSecs?, maxRounds? }
-export function aiGenerateSql(connId, database, prompt, config) {
-  return invoke('ai_generate_sql', { connId, database, prompt, config });
+// continueSession: true 时在上一次的会话上下文基础上继续（追问式微调）
+export function aiGenerateSql(connId, database, prompt, config, continueSession) {
+  return invoke('ai_generate_sql', { connId, database, prompt, config, continueSession });
 }
 
 export function aiTestConfig(config) {

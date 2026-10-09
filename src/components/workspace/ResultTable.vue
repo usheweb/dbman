@@ -68,7 +68,9 @@ function headerItems() {
   return items;
 }
 
-function showCellMenu(e, value) {
+function showCellMenu(e, r, c, value) {
+  // 右键同样要落在选中态上，和左键点击表现一致
+  selectCell(r, c);
   menu.value = { visible: true, x: e.clientX, y: e.clientY, items: [{ label: '复制', value: 'copy' }], target: '', value };
 }
 
@@ -153,7 +155,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             :data-midx="cellMidx(r, c)"
             @click="selectCell(r, c)"
             @dblclick="ui.openContent(rawText(ws.lastResult.data[r][col]))"
-            @contextmenu.prevent="showCellMenu($event, rawText(ws.lastResult.data[r][col]))"
+            @contextmenu.prevent="showCellMenu($event, r, c, rawText(ws.lastResult.data[r][col]))"
           >{{ ws.applyDisplayMode(ws.lastResult.data[r][col], modes[col], colInfo[col]) }}</td>
         </tr>
       </tbody>

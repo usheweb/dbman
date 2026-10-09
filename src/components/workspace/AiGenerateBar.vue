@@ -1,11 +1,17 @@
 <script setup>
 // AI 生成栏：一句话描述 → 大模型按需查询表结构 → SQL 写入编辑器（不自动执行）
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAiStore } from '@/stores/ai';
 import { useUiStore } from '@/stores/ui';
+import { useConnectionStore } from '@/stores/connection';
+import { useTableMention } from '@/composables/useTableMention';
+import AiTableMention from './AiTableMention.vue';
 
 const ai = useAiStore();
 const ui = useUiStore();
+const conn = useConnectionStore();
+
+const inputEl = ref(null);
 
 // 生成中优先显示当前阶段（正在请求模型第几轮），否则显示状态文案
 const statusText = computed(() => {
@@ -16,10 +22,26 @@ const statusText = computed(() => {
   return ai.status;
 });
 
+const {
+  mentionRef, mentionOpen, mentionQuery, mentionedTables,
+  onInput, syncMention, handleKeydown, insertTable, closeMention,
+  onAddCurrentTable, removeTable, onClear
+} = useTableMention(inputEl, { onEnter: () => onGenerate() });
+
 async function onGenerate() {
+  closeMention();
   // 不清空输入框：结果不满意时可直接改提示词重试
-  await ai.generate(ai.prompt);
+  await ai.generate(ai.prompt, true);
 }
+
+// 丢弃上一轮上下文，从头生成
+async function onRegenerate() {
+  closeMention();
+  await ai.generate(ai.prompt, false);
+}
+
+// 生成中不让候选菜单残留
+watch(() => ai.generating, v => { if (v) closeMention(); });
 
 // 本地元数据查询常在几十毫秒内：不足 1 秒显示毫秒，否则显示秒（保留 1 位小数）
 function formatElapsed(ms) {
@@ -33,21 +55,45 @@ function formatElapsed(ms) {
     <div class="ai-bar-row">
       <div class="ai-bar-field">
         <input
-          v-model="ai.prompt"
+          ref="inputEl"
+          :value="ai.prompt"
           type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
           class="filter-input ai-bar-input"
-          placeholder="用一句话描述需求，例如：查出最近 7 天注册的用户"
+          placeholder="用一句话描述需求，@ 可引用表名，例如：查出最近 7 天注册的用户"
           :disabled="ai.generating"
-          @keyup.enter="onGenerate"
+          @input="onInput"
+          @click="syncMention"
+          @keydown="handleKeydown"
         >
-        <button v-if="ai.prompt" class="ai-bar-clear" title="清空" @click="ai.prompt = ''">
+        <button v-if="ai.prompt" class="ai-bar-clear" title="清空" @click="onClear">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
         </button>
       </div>
       <button class="btn" :disabled="ai.generating" @click="onGenerate">
-        {{ ai.generating ? '生成中…' : 'AI 生成' }}
+        {{ ai.generating ? '生成中…' : (ai.hasSession ? '继续微调' : 'AI 生成') }}
       </button>
+      <button
+        v-if="ai.hasSession"
+        class="btn btn-secondary"
+        :disabled="ai.generating"
+        title="丢弃上一轮上下文，从头生成"
+        @click="onRegenerate"
+      >重新生成</button>
+      <button
+        class="btn btn-secondary"
+        :disabled="!conn.currentTable || ai.generating"
+        title="把当前选中的表名插入到需求里"
+        @click="onAddCurrentTable"
+      >+ 当前表</button>
       <button class="btn btn-secondary" @click="ui.openModal('aiConfigModal')">AI 设置</button>
+    </div>
+
+    <!-- 已引用的表：让用户确认模型会看到哪些表 -->
+    <div v-if="mentionedTables.length" class="ai-bar-tables">
+      <span v-for="name in mentionedTables" :key="name" class="ai-table-chip" :title="'点击移除 @' + name">
+        @{{ name }}
+        <button class="ai-table-chip-x" @click="removeTable(name)">×</button>
+      </span>
     </div>
 
     <div v-if="ai.generating || ai.error || ai.status" class="ai-bar-status" :class="{ 'is-error': !!ai.error }">
@@ -62,6 +108,16 @@ function formatElapsed(ms) {
         <span class="ai-step-time">{{ formatElapsed(step.ms) }}</span>
       </span>
     </div>
+
+    <AiTableMention
+      ref="mentionRef"
+      :open="mentionOpen"
+      :query="mentionQuery"
+      :tables="conn.allTables"
+      :anchor-el="inputEl"
+      @pick="insertTable"
+      @close="closeMention"
+    />
   </div>
 </template>
 
@@ -127,6 +183,39 @@ function formatElapsed(ms) {
 .ai-bar-row .btn {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.ai-bar-tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-table-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1px 6px;
+}
+
+.ai-table-chip-x {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.ai-table-chip-x:hover {
+  color: var(--magenta);
 }
 
 .ai-bar-status {

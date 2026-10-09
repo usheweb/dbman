@@ -1,7 +1,7 @@
 // AI：大模型配置（本地持久化）+ 生成状态
 // 请求统一走 Rust（api.aiGenerateSql），密钥不进 js 之外的任何地方，也不直连上游。
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import * as api from '@/api';
 import { useStoreStore } from './store';
@@ -36,6 +36,15 @@ export const useAiStore = defineStore('ai', () => {
   const phase = ref('');
   const phaseRound = ref(0);
   const lastUsage = ref(null);
+  // 后端是否留有本连接 + 本库的会话上下文（决定按钮显示「AI 生成」还是「继续微调」）
+  const hasSession = ref(false);
+  const turn = ref(0);
+
+  // 换连接或换库就不该再沿用上一轮的上下文
+  watch(
+    () => [conn.currentConnId, conn.currentDatabase],
+    () => { hasSession.value = false; turn.value = 0; }
+  );
 
   function init() {
     Object.assign(config.value, DEFAULT_AI_CONFIG, store.get('dbman_ai_config') || {});
@@ -75,7 +84,8 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   // 生成 SQL 并写入编辑器（不自动执行，用户审阅后自行 Ctrl+Enter）
-  async function generate(prompt) {
+  // keepSession 为 true 且后端留有上下文时，在上一次会话基础上继续（追问式微调）
+  async function generate(prompt, keepSession = false) {
     const text = String(prompt || '').trim();
     if (!text) {
       ui.showToast('请先描述你的查询需求', 'error');
@@ -97,17 +107,22 @@ export const useAiStore = defineStore('ai', () => {
     phase.value = '';
     phaseRound.value = 0;
     lastUsage.value = null;
-    status.value = '正在生成 SQL…（模型会先查询表结构）';
+    status.value = keepSession && hasSession.value
+      ? '正在基于上一轮结果微调…'
+      : '正在生成 SQL…（模型会先查询表结构）';
     try {
       const res = await conn.withRetry(id => api.aiGenerateSql(
-        id, conn.currentDatabase, text, { ...config.value }
+        id, conn.currentDatabase, text, { ...config.value }, !!keepSession
       ));
       lastUsage.value = res.usage || null;
+      hasSession.value = !!res.hasSession;
+      turn.value = res.turn || 0;
       ws.setSql(res.sql);
-      status.value = `已生成（${res.rounds} 轮）`;
+      status.value = `已生成（第 ${res.turn || 1} 轮上下文，${res.rounds} 次模型调用）`;
       ui.showToast('SQL 已生成并写入编辑器', 'success');
       return true;
     } catch (err) {
+      // 失败时保留上一轮可用上下文，用户可直接重试
       error.value = String((err && err.message) || err);
       status.value = '';
       ui.showToast('生成失败：' + error.value, 'error');
@@ -125,10 +140,13 @@ export const useAiStore = defineStore('ai', () => {
     phase.value = '';
     phaseRound.value = 0;
     lastUsage.value = null;
+    hasSession.value = false;
+    turn.value = 0;
   }
 
   return {
     config, generating, status, error, prompt, steps, phase, phaseRound, lastUsage,
+    hasSession, turn,
     init, isConfigured, saveConfig, testConfig, generate, reset
   };
 });
