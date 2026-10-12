@@ -1,6 +1,6 @@
 <script setup>
 // SQL 编辑器：CodeMirror 5 实例 + 编辑器工具栏
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import CodeMirror from 'codemirror';
 import 'codemirror/mode/sql/sql.js';
 import 'codemirror/addon/hint/show-hint.js';
@@ -10,6 +10,7 @@ import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import { useSqlStore } from '@/stores/sql';
 import { useAiStore } from '@/stores/ai';
+import { useThemeStore } from '@/stores/theme';
 import * as api from '@/api';
 import { formatSql } from '@/utils/sql';
 import { showSqlHint } from '@/composables/useSqlHint';
@@ -19,6 +20,7 @@ const ui = useUiStore();
 const conn = useConnectionStore();
 const sqlStore = useSqlStore();
 const ai = useAiStore();
+const theme = useThemeStore();
 
 const ta = ref(null);
 let cm = null;
@@ -26,11 +28,13 @@ let cm = null;
 onMounted(() => {
   cm = CodeMirror.fromTextArea(ta.value, {
     mode: 'text/x-mysql',
-    theme: 'monokai',
+    // 跟随全局主题：亮色 eclipse / 暗色 monokai，主题切换时由下方 watch 同步
+    theme: theme.editorTheme,
     lineNumbers: true,
     indentWithTabs: false,
-    indentUnit: 4,
-    tabSize: 4,
+    // 与 formatSql 的缩进保持一致（2 空格），否则回车续行与格式化结果缩进不同
+    indentUnit: 2,
+    tabSize: 2,
     lineWrapping: true,
     extraKeys: {
       'Ctrl-Space': () => showSqlHint(cm, conn),
@@ -50,6 +54,11 @@ onMounted(() => {
   });
   cm.setValue('');
   ws.resetPageState();
+});
+
+// 主题切换时同步 CodeMirror 皮肤（实例只初始化一次，这里改 option 即可）
+watch(() => theme.editorTheme, (name) => {
+  if (cm) cm.setOption('theme', name);
 });
 
 onBeforeUnmount(() => {
@@ -75,7 +84,13 @@ function openFavFromEditor() {
 }
 
 function onFormat() {
-  ws.setSql(formatSql(ws.getSql()));
+  const sql = ws.getSql();
+  if (!sql.trim()) return;
+  try {
+    ws.setSql(formatSql(sql));
+  } catch (e) {
+    ui.showToast('SQL 不完整，无法格式化', 'error');
+  }
 }
 
 // 选择外部 SQL 文件，把内容载入编辑器（不自动执行，用户确认后再跑）

@@ -186,7 +186,7 @@ function close() {
 .dz-tab.active {
   color: var(--cyan);
   border-color: var(--line-strong);
-  background: rgba(0, 229, 255, .06);
+  background: rgba(var(--cyan-rgb), .06);
   box-shadow: inset 0 0 18px -10px var(--cyan);
 }
 .dz-panel {
@@ -226,7 +226,7 @@ function close() {
 }
 .dz-sql:focus {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, .25), 0 0 14px -3px rgba(0, 229, 255, .6);
+  box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25), 0 0 14px -3px rgba(var(--cyan-rgb), .6);
 }
 .dz-actions {
   display: flex;

@@ -45,12 +45,33 @@ pub struct SshConfig {
     pub private_key: Option<String>,
 }
 
+/// 表列表用：表名/注释 + information_schema.TABLES 的排序维度字段。
+/// 各字段都可能为 NULL（视图、无引擎、无自增等），前端按「空值排最后」处理。
 #[derive(Debug, Serialize)]
 pub struct TableInfo {
     #[serde(rename = "tableName")]
     pub table_name: String,
     #[serde(rename = "tableComment")]
     pub table_comment: Option<String>,
+    #[serde(rename = "createTime")]
+    pub create_time: Option<String>,
+    #[serde(rename = "updateTime")]
+    pub update_time: Option<String>,
+    #[serde(rename = "tableRows")]
+    pub table_rows: Option<u64>,
+    #[serde(rename = "dataLength")]
+    pub data_length: Option<u64>,
+    #[serde(rename = "indexLength")]
+    pub index_length: Option<u64>,
+    /// DATA_LENGTH + INDEX_LENGTH，两者都为空时为 None
+    #[serde(rename = "totalLength")]
+    pub total_length: Option<u64>,
+    pub engine: Option<String>,
+    pub charset: Option<String>,
+    #[serde(rename = "tableType")]
+    pub table_type: Option<String>,
+    #[serde(rename = "autoIncrement")]
+    pub auto_increment: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]

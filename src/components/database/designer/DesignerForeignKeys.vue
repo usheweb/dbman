@@ -148,7 +148,7 @@ function setRefColumns(fk, text) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, .02);
+  background: rgba(var(--overlay-rgb), .02);
   border: 1px solid var(--line);
   border-radius: 5px;
   color: var(--text-dim);

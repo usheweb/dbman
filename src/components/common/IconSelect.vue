@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(4, 7, 15, .7);
+  background: rgba(var(--void-rgb), .7);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text);
@@ -179,7 +179,7 @@ onBeforeUnmount(() => {
 .icon-select.open .icon-select-trigger,
 .icon-select-trigger:hover {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, .25), 0 0 16px -3px rgba(0, 229, 255, .6);
+  box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25), 0 0 16px -3px rgba(var(--cyan-rgb), .6);
 }
 
 .icon-select-caret {
@@ -200,14 +200,14 @@ onBeforeUnmount(() => {
   background: var(--panel-solid);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  box-shadow: 0 14px 34px -14px rgba(0, 229, 255, .55);
+  box-shadow: 0 14px 34px -14px rgba(var(--cyan-rgb), .55);
 }
 
 .icon-select-search {
   width: 100%;
   margin-bottom: 4px;
   padding: 7px 9px;
-  background: rgba(4, 7, 15, .7);
+  background: rgba(var(--void-rgb), .7);
   border: 1px solid var(--line);
   border-radius: 4px;
   color: var(--text);
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
 
 .icon-select-search:focus {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, .25), 0 0 12px -3px rgba(0, 229, 255, .6);
+  box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25), 0 0 12px -3px rgba(var(--cyan-rgb), .6);
 }
 
 /* 选项上百个时内部滚动，不撑破窗口 */
@@ -246,12 +246,12 @@ onBeforeUnmount(() => {
 }
 
 .icon-select-option:hover {
-  background: rgba(0, 229, 255, .08);
+  background: rgba(var(--cyan-rgb), .08);
 }
 
 .icon-select-option.active {
   color: var(--cyan);
-  background: rgba(0, 229, 255, .12);
+  background: rgba(var(--cyan-rgb), .12);
 }
 
 .icon-select-label {

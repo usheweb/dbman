@@ -1,5 +1,6 @@
 // SQL 相关纯函数：类型识别、危险语句判定、排序/筛选改写、模糊匹配、格式化
 // 全部从原 dbman/public/index.html 内联脚本迁移而来，逻辑保持一致
+import { format } from 'sql-formatter';
 
 export const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'LIMIT', 'OFFSET', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'SET', 'VALUES', 'INTO', 'AS', 'DISTINCT', 'HAVING', 'UNION', 'ALL', 'ANY', 'SOME', 'EXISTS', 'IN', 'NOT', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'TRUE', 'FALSE', 'ASC', 'DESC'];
 
@@ -460,13 +461,13 @@ export function parseWhereToRows(whereText) {
   return rows;
 }
 
-// 简易格式化：压缩空白后把关键字换行
+// SQL 美化：交给 sql-formatter（按 MySQL 方言），关键字转大写、每列一行、子句缩进两格
+// 解析不了的语句会抛错，调用方需保留原文，避免把用户写的 SQL 弄丢
 export function formatSql(sql) {
-  let out = String(sql).replace(/\s+/g, ' ').trim();
-  const keywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'ORDER', 'GROUP', 'BY', 'LIMIT', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE'];
-  keywords.forEach(kw => {
-    const regex = new RegExp('\\b' + kw + '\\b', 'gi');
-    out = out.replace(regex, '\n' + kw);
+  return format(String(sql), {
+    language: 'mysql',
+    keywordCase: 'upper',
+    tabWidth: 2,
+    linesBetweenQueries: 2
   });
-  return out.trim();
 }

@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useStoreStore } from './store';
+import { DEFAULT_TABLE_SORT, normalizeSortKeys } from '@/utils/tableSort';
 
 const PANEL_TITLES = { sidebar: '连接', tree: '表列表' };
 
@@ -37,9 +38,20 @@ export const useUiStore = defineStore('ui', () => {
   // 导出选项（表头方式 / 导出范围），持久化
   const exportOpts = ref({ header: 'both', scope: 'page' });
 
+  // 表列表排序键（可多列组合），持久化
+  const tableSort = ref(DEFAULT_TABLE_SORT.map(k => ({ ...k })));
+
   function init() {
     Object.assign(panelState.value, store.get('dbman_panel_state') || {});
     Object.assign(exportOpts.value, store.get('dbman_export_opts') || {});
+    const saved = normalizeSortKeys(store.get('dbman_table_sort'));
+    tableSort.value = saved.length ? saved : DEFAULT_TABLE_SORT.map(k => ({ ...k }));
+  }
+
+  function saveTableSort(keys) {
+    const next = normalizeSortKeys(keys);
+    tableSort.value = next;
+    store.set('dbman_table_sort', next);
   }
 
   function savePanelState() {
@@ -98,6 +110,7 @@ export const useUiStore = defineStore('ui', () => {
     exportOpts,
     contentValue,
     connModalTarget,
+    tableSort,
     init,
     togglePanel,
     setPanel,
@@ -106,6 +119,7 @@ export const useUiStore = defineStore('ui', () => {
     closeModal,
     showToast,
     saveExportOpts,
+    saveTableSort,
     openContent,
     openConnectionModal
   };

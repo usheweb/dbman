@@ -11,6 +11,7 @@ export const STORE_KEYS = [
   'dbman_global_display',
   'dbman_panel_state',
   'dbman_export_opts',
+  'dbman_table_sort',
   'dbman_sql_log',
   'dbman_sql_favorites',
   'dbman_ai_config'

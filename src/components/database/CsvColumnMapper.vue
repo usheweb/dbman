@@ -92,7 +92,7 @@ function cellValue(row, i) {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #0d1526;
+  background: var(--panel-solid);
   vertical-align: top;
 }
 .cm-idx {
@@ -112,7 +112,7 @@ function cellValue(row, i) {
   width: 100%;
   min-width: 130px;
   padding: 4px 6px;
-  background: rgba(4, 7, 15, .8);
+  background: rgba(var(--void-rgb), .8);
   border: 1px solid var(--line);
   border-radius: 5px;
   color: var(--text);

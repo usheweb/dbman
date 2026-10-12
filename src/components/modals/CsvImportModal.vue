@@ -187,7 +187,7 @@ const fileName = () => (csv.path ? csv.path.split(/[\\/]/).pop() : '');
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(0, 229, 255, .05);
+  background: rgba(var(--cyan-rgb), .05);
   color: var(--text);
   font-size: 13px;
 }

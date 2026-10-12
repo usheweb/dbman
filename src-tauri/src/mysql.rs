@@ -255,15 +255,19 @@ pub(crate) async fn use_database(conn: &mut Conn, database: &str) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// 查询某库的表（名 + 注释）。filter 非空时按表名/注释模糊匹配。
-/// 供 mysql_tables 命令与 llm.rs 的 search_tables 工具共用。
+/// 查询某库的表（名 + 注释 + 排序维度元数据）。filter 非空时按表名/注释模糊匹配。
+/// 供 mysql_tables 命令与 llm.rs 的 search_tables 工具共用（后者只取 table_name/table_comment）。
+/// 列全部来自 information_schema.TABLES，MySQL 5.6 及更早版本同样具备这些列。
 pub(crate) async fn fetch_tables(
     conn: &mut Conn,
     database: &str,
     filter: Option<&str>,
 ) -> Result<Vec<TableInfo>, String> {
     let mut sql = String::from(
-        "SELECT TABLE_NAME as tableName, TABLE_COMMENT as tableComment \
+        "SELECT TABLE_NAME as tableName, TABLE_COMMENT as tableComment, \
+         CREATE_TIME, UPDATE_TIME, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH, \
+         ENGINE, SUBSTRING_INDEX(TABLE_COLLATION, '_', 1) as tableCharset, \
+         TABLE_TYPE, AUTO_INCREMENT \
          FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?",
     );
     let mut params: Vec<Value> = vec![Value::Bytes(database.as_bytes().to_vec())];
@@ -280,17 +284,26 @@ pub(crate) async fn fetch_tables(
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     while let Some(row) = result.next().await.map_err(|e| e.to_string())? {
-        let table_name = row
-            .as_ref(0)
-            .map(|v| json_to_string(&value_to_json(v, false)))
-            .unwrap_or_default();
-        let table_comment = match row.as_ref(1) {
-            Some(Value::NULL) | None => None,
-            Some(v) => Some(json_to_string(&value_to_json(v, false))),
+        // information_schema.TABLES 的尺寸单位是字节
+        let data_length = opt_u64(&row, 5);
+        let index_length = opt_u64(&row, 6);
+        let total_length = match (data_length, index_length) {
+            (None, None) => None,
+            (d, i) => Some(d.unwrap_or(0) + i.unwrap_or(0)),
         };
         out.push(TableInfo {
-            table_name,
-            table_comment,
+            table_name: opt_string(&row, 0).unwrap_or_default(),
+            table_comment: opt_string(&row, 1),
+            create_time: opt_string(&row, 2),
+            update_time: opt_string(&row, 3),
+            table_rows: opt_u64(&row, 4),
+            data_length,
+            index_length,
+            total_length,
+            engine: opt_string(&row, 7),
+            charset: opt_string(&row, 8),
+            table_type: opt_string(&row, 9),
+            auto_increment: opt_u64(&row, 10),
         });
     }
     result.drop_result().await.map_err(|e| e.to_string())?;
@@ -583,6 +596,16 @@ fn opt_i64(row: &Row, idx: usize) -> Option<i64> {
     match row.as_ref(idx) {
         Some(Value::Int(v)) => Some(*v),
         Some(Value::UInt(v)) => Some(*v as i64),
+        Some(Value::Bytes(b)) => String::from_utf8_lossy(b).trim().parse().ok(),
+        _ => None,
+    }
+}
+
+/// 取一列并转成 Option<u64>（NULL / 负数 / 非数字 → None）；用于 information_schema 的尺寸与行数。
+fn opt_u64(row: &Row, idx: usize) -> Option<u64> {
+    match row.as_ref(idx) {
+        Some(Value::UInt(v)) => Some(*v),
+        Some(Value::Int(v)) => u64::try_from(*v).ok(),
         Some(Value::Bytes(b)) => String::from_utf8_lossy(b).trim().parse().ok(),
         _ => None,
     }

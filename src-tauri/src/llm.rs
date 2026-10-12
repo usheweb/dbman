@@ -4,11 +4,12 @@
 //! - 请求走 Rust（浏览器直连会被 CORS 挡，密钥也不该进 JS）；二期只需换 base_url 加鉴权头。
 //! - **不向模型预传任何表名/表结构**：一次生成通常只用到 1~2 张表，全量表名绝大多数是冗余。
 //!   模型必须先用 `search_tables` 找候选表，再用 `get_table_columns` 取字段。
-//! - system prompt 保持纯静态（利于上游前缀缓存），动态内容（库名/表总数/需求）放最后一条 user 消息。
+//! - system prompt 保持纯静态（利于上游前缀缓存），动态内容（当前时间/库名/表总数/需求）放最后一条 user 消息。
 //! - 工具结果只给「表名 + 注释 + 字段名 + 类型 + 注释」，不给任何真实数据行。
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::{Datelike, Local, Weekday};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
@@ -48,7 +49,24 @@ const SYSTEM_PROMPT: &str = "\
 1. 只输出一条 SQL 语句本身，不要任何解释文字，不要使用 ``` 代码围栏。
 2. 使用 MySQL 语法，表名与列名用反引号包裹。
 3. 除非用户明确要求，不要生成 INSERT / UPDATE / DELETE / DROP / ALTER 等改动数据或结构的语句。
-4. 若需求里的时间范围对应的是时间戳字段，按用户描述的时间语义处理。";
+4. 若需求里的时间范围对应的是时间戳字段，按用户描述的时间语义处理。
+5. 需求里出现「今天/昨天/本周/最近 N 天」等相对时间时，一律以用户消息里给出的「当前时间」为基准换算，禁止使用你自己的训练日期。";
+
+/// 当前本地时间（含星期）。动态内容，注入到最后一条 user 消息里，
+/// 否则模型会用训练数据里的日期去算「今天」，导致生成的时间条件完全错误。
+fn now_text() -> String {
+    let now = Local::now();
+    let weekday = match now.weekday() {
+        Weekday::Mon => "星期一",
+        Weekday::Tue => "星期二",
+        Weekday::Wed => "星期三",
+        Weekday::Thu => "星期四",
+        Weekday::Fri => "星期五",
+        Weekday::Sat => "星期六",
+        Weekday::Sun => "星期日",
+    };
+    format!("{} {}", now.format("%Y-%m-%d %H:%M:%S"), weekday)
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiConfig {
@@ -485,16 +503,17 @@ pub async fn ai_generate_sql(
             json!({
                 "role": "user",
                 "content": format!(
-                    "当前数据库：{}\n该库共有 {} 张表。请通过工具按需查询表结构后生成 SQL。\n\n用户需求：{}",
-                    database, total_tables, prompt
+                    "当前时间：{}\n当前数据库：{}\n该库共有 {} 张表。请通过工具按需查询表结构后生成 SQL。\n\n用户需求：{}",
+                    now_text(), database, total_tables, prompt
                 )
             }),
         ];
         turn = 1;
     } else {
+        // 追问也要带上最新时间：会话可能跨天，旧的「当前时间」已过期
         messages.push(json!({
             "role": "user",
-            "content": format!("用户补充/修正：{}", prompt)
+            "content": format!("当前时间：{}。用户补充/修正：{}", now_text(), prompt)
         }));
     }
     trim_messages(&mut messages);

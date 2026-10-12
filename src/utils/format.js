@@ -97,6 +97,37 @@ export function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+// 字节数 → 可读大小（B/KB/MB/GB/TB，大于 1KB 时保留 1 位小数）
+export function formatBytes(bytes) {
+  if (bytes === null || bytes === undefined || bytes === '') return '';
+  const n = Number(bytes);
+  if (!isFinite(n) || n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  // 保留 1 位小数后若进位成 1024（如 1048575 字节 → 1024.0 KB），再升一级单位，
+  // 避免出现「1024.0 KB」这种本该是「1.0 MB」的尴尬值
+  if (i > 0 && Number(v.toFixed(1)) >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return (i === 0 ? String(v) : v.toFixed(1)) + ' ' + units[i];
+}
+
+// 行数 / 自增值 → 紧凑文本（万 / 亿），避免长数字撑破窄栏
+export function formatRows(n) {
+  if (n === null || n === undefined || n === '') return '';
+  const v = Number(n);
+  if (!isFinite(v)) return '';
+  if (v >= 1e8) return (v / 1e8).toFixed(1) + '亿';
+  if (v >= 1e4) return (v / 1e4).toFixed(1) + '万';
+  return String(v);
+}
+
 export function exportFilename() {
   return `dbman_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.csv`;
 }

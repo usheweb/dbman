@@ -1,7 +1,7 @@
 {
   "name": "dbman-tauri",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "DBMan - 基于 Tauri + Rust + Vue 3 的现代桌面数据库管理工具",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "codemirror": "^5.65.18",
     "pinia": "^2.2.6",
+    "sql-formatter": "^15.9.0",
     "vue": "^3.5.12"
   },
   "devDependencies": {

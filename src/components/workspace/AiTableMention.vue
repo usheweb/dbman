@@ -158,7 +158,7 @@ defineExpose({ handleKeydown });
   background: var(--panel-solid);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  box-shadow: 0 14px 34px -14px rgba(0, 229, 255, .55);
+  box-shadow: 0 14px 34px -14px rgba(var(--cyan-rgb), .55);
 }
 
 .mention-list {
@@ -178,12 +178,12 @@ defineExpose({ handleKeydown });
 
 .mention-item:hover,
 .mention-item.active {
-  background: rgba(0, 229, 255, .08);
+  background: rgba(var(--cyan-rgb), .08);
 }
 
 .mention-item.active {
   color: var(--cyan);
-  background: rgba(0, 229, 255, .12);
+  background: rgba(var(--cyan-rgb), .12);
 }
 
 .mention-name {

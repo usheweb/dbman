@@ -8,7 +8,9 @@ import { useCsvImportStore } from '@/stores/csvImport';
 import ItemIcon from '@/components/common/ItemIcon.vue';
 import IconSelect from '@/components/common/IconSelect.vue';
 import ContextMenu from '@/components/common/ContextMenu.vue';
+import TableSortMenu from '@/components/database/TableSortMenu.vue';
 import { sqlIdent } from '@/utils/sql';
+import { sortTables, metaText, defaultMetaText, fieldLabel, DEFAULT_TABLE_SORT } from '@/utils/tableSort';
 
 const ui = useUiStore();
 const connStore = useConnectionStore();
@@ -17,6 +19,31 @@ const tableStore = useTableStore();
 const csvStore = useCsvImportStore();
 
 const filterText = ref('');
+
+// 表列表排序（多列组合，持久化在 ui store）
+const sortVisible = ref(false);
+const sortBtnEl = ref(null);
+const sortKeys = computed(() => ui.tableSort);
+const sortActive = computed(() => {
+  const k = sortKeys.value;
+  return !(k.length === DEFAULT_TABLE_SORT.length
+    && k.every((x, i) => x.field === DEFAULT_TABLE_SORT[i].field && x.dir === DEFAULT_TABLE_SORT[i].dir));
+});
+const sortTitle = computed(() => {
+  if (!sortKeys.value.length) return '排序：未设置';
+  return '排序：' + sortKeys.value
+    .map(k => fieldLabel(k.field) + (k.dir === 'asc' ? ' ↑' : ' ↓'))
+    .join('，');
+});
+
+function updateSort(keys) {
+  ui.saveTableSort(keys);
+}
+
+function metaOf(table) {
+  // 有额外排序维度时展示排序维度值，否则默认展示「行数 · 总大小」
+  return metaText(table, sortKeys.value) || defaultMetaText(table);
+}
 
 // 右键菜单
 const menuVisible = ref(false);
@@ -60,6 +87,9 @@ const filteredTables = computed(() => {
     return true;
   });
 });
+
+// 过滤后再按排序键（可多列组合）排序
+const sortedTables = computed(() => sortTables(filteredTables.value, sortKeys.value));
 
 // 列表上方的数量统计：无过滤词时给全量，有过滤词时给「命中 / 总数」
 const tableCountText = computed(() => {
@@ -148,6 +178,25 @@ function onMenuSelect(item) {
     </div>
     <div class="tree-filter-row">
       <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="filter-input" v-model="filterText" placeholder="过滤表名/注释...">
+      <div class="sort-wrap">
+        <button
+          ref="sortBtnEl"
+          class="tree-sort-btn"
+          :class="{ active: sortActive }"
+          :title="sortTitle"
+          @click.stop="sortVisible = !sortVisible"
+        >
+          <span class="sort-arrow">⇅</span>
+          <span v-if="sortKeys.length > 1" class="sort-badge">{{ sortKeys.length }}</span>
+        </button>
+        <TableSortMenu
+          v-if="sortVisible"
+          :model-value="sortKeys"
+          :anchor="sortBtnEl"
+          @update:model-value="updateSort"
+          @close="sortVisible = false"
+        />
+      </div>
       <button
         class="panel-toggle"
         @click="ui.togglePanel('tree')"
@@ -157,7 +206,7 @@ function onMenuSelect(item) {
     <div v-if="connStore.currentDatabase" class="tree-count-row" :title="tableCountText">{{ tableCountText }}</div>
     <div id="tableList">
       <div
-        v-for="t in filteredTables"
+        v-for="t in sortedTables"
         :key="t.tableName"
         class="tree-item tree-table"
         :class="{ active: connStore.currentTable === t.tableName }"
@@ -168,6 +217,7 @@ function onMenuSelect(item) {
         <span class="tree-table-body">
           <span class="tree-table-name">{{ t.tableName }}</span>
           <span v-if="t.tableComment" class="tree-table-comment">{{ t.tableComment }}</span>
+          <span v-if="metaOf(t)" class="tree-table-meta" :title="metaOf(t)">{{ metaOf(t) }}</span>
         </span>
       </div>
     </div>

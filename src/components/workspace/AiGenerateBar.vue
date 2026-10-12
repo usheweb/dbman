@@ -2,13 +2,11 @@
 // AI 生成栏：一句话描述 → 大模型按需查询表结构 → SQL 写入编辑器（不自动执行）
 import { computed, ref, watch } from 'vue';
 import { useAiStore } from '@/stores/ai';
-import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import { useTableMention } from '@/composables/useTableMention';
 import AiTableMention from './AiTableMention.vue';
 
 const ai = useAiStore();
-const ui = useUiStore();
 const conn = useConnectionStore();
 
 const inputEl = ref(null);
@@ -59,15 +57,25 @@ function formatElapsed(ms) {
           :value="ai.prompt"
           type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
           class="filter-input ai-bar-input"
+          :class="{ 'has-clear': !!ai.prompt }"
           placeholder="用一句话描述需求，@ 可引用表名，例如：查出最近 7 天注册的用户"
           :disabled="ai.generating"
           @input="onInput"
           @click="syncMention"
           @keydown="handleKeydown"
         >
-        <button v-if="ai.prompt" class="ai-bar-clear" title="清空" @click="onClear">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-        </button>
+        <!-- 输入框内右侧的悬浮操作：当前表 + 清空 -->
+        <div class="ai-bar-actions">
+          <button
+            class="ai-bar-float"
+            :disabled="!conn.currentTable || ai.generating"
+            :title="conn.currentTable ? '把当前表 ' + conn.currentTable + ' 插入到需求里' : '先在左侧表列表选一张表'"
+            @click="onAddCurrentTable"
+          >+ 当前表</button>
+          <button v-if="ai.prompt" class="ai-bar-clear" title="清空" @click="onClear">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
       </div>
       <button class="btn" :disabled="ai.generating" @click="onGenerate">
         {{ ai.generating ? '生成中…' : (ai.hasSession ? '继续微调' : 'AI 生成') }}
@@ -79,13 +87,6 @@ function formatElapsed(ms) {
         title="丢弃上一轮上下文，从头生成"
         @click="onRegenerate"
       >重新生成</button>
-      <button
-        class="btn btn-secondary"
-        :disabled="!conn.currentTable || ai.generating"
-        title="把当前选中的表名插入到需求里"
-        @click="onAddCurrentTable"
-      >+ 当前表</button>
-      <button class="btn btn-secondary" @click="ui.openModal('aiConfigModal')">AI 设置</button>
     </div>
 
     <!-- 已引用的表：让用户确认模型会看到哪些表 -->
@@ -156,14 +157,26 @@ function formatElapsed(ms) {
 .ai-bar-input {
   width: 100%;
   margin-bottom: 0;
-  padding-right: 30px; /* 给清空图标留位 */
+  padding-right: 76px; /* 给「当前表」悬浮按钮留位 */
+}
+
+/* 出现清空图标时再多留一点，避免文字压到按钮上 */
+.ai-bar-input.has-clear {
+  padding-right: 100px;
+}
+
+/* 悬浮在输入框内的右侧操作区（不占行内空间） */
+.ai-bar-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .ai-bar-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
   width: 18px;
   height: 18px;
   display: flex;
@@ -184,6 +197,32 @@ function formatElapsed(ms) {
 .ai-bar-clear svg {
   width: 13px;
   height: 13px;
+}
+
+/* 当前表：输入框内的轻量悬浮按钮，不抢视觉 */
+.ai-bar-float {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  background: rgba(var(--cyan-rgb), .08);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--cyan-soft);
+  font-family: var(--font-cjk);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.ai-bar-float:hover:not(:disabled) {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.ai-bar-float:disabled {
+  opacity: .35;
+  cursor: default;
 }
 
 /* 按钮不许被压扁换行 */
