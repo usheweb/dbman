@@ -53,15 +53,15 @@ function isPrimary(ix) {
       <span class="dz-hint">索引名填 PRIMARY 即为主键；多个列按顺序用逗号分隔（如 a, b）。可用列：{{ colNames.join(', ') || '无' }}</span>
     </div>
 
-    <div class="dz-head dz-grid">
-      <span>索引名</span>
-      <span>类型</span>
-      <span class="dz-c">唯一</span>
-      <span>列（按顺序）</span>
-      <span class="dz-c">操作</span>
-    </div>
-
     <div class="dz-body">
+      <div class="dz-head dz-grid">
+        <span>索引名</span>
+        <span>类型</span>
+        <span class="dz-c">唯一</span>
+        <span>列（按顺序）</span>
+        <span class="dz-c">操作</span>
+      </div>
+
       <div class="dz-row dz-grid" v-for="(ix, i) in indexes" :key="i">
         <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
           v-model="ix.name" placeholder="索引名 / PRIMARY" @input="touch">
@@ -84,80 +84,8 @@ function isPrimary(ix) {
 </template>
 
 <style scoped>
-.dz-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.dz-count {
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.dz-hint {
-  color: var(--text-dim);
-  font-size: 12px;
-  line-height: 1.5;
-}
+/* 网格列宽：索引名 / 类型 / 唯一 / 列（按顺序） / 操作 */
 .dz-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 118px 56px 2fr 60px;
-  gap: 8px;
-  align-items: center;
-}
-.dz-head {
-  padding: 0 4px 8px;
-  color: var(--text-dim);
-  font-size: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.dz-c {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dz-acts {
-  gap: 4px;
-}
-.dz-body {
-  max-height: 42vh;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-.dz-row {
-  padding: 6px 4px;
-  border-bottom: 1px dashed var(--line);
-}
-.dz-row input[type="text"],
-.dz-row select {
-  width: 100%;
-  min-width: 0;
-}
-.dz-mini {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(var(--overlay-rgb), .02);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.dz-mini.dz-danger:hover {
-  border-color: var(--magenta);
-  color: var(--magenta);
-}
-.dz-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 12px;
+  grid-template-columns: 1.2fr 118px 56px 2fr 64px;
 }
 </style>

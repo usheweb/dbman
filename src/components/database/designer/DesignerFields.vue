@@ -68,18 +68,18 @@ const isLastRow = i => i === props.columns.length - 1;
       <option v-for="t in COMMON_TYPES" :key="t" :value="t" />
     </datalist>
 
-    <div class="dz-head dz-grid">
-      <span>字段名</span>
-      <span>类型</span>
-      <span class="dz-c">允许 NULL</span>
-      <span>默认值</span>
-      <span>注释</span>
-      <span class="dz-c">自增</span>
-      <span class="dz-c">更新时</span>
-      <span class="dz-c">操作</span>
-    </div>
-
     <div class="dz-body">
+      <div class="dz-head dz-grid">
+        <span>字段名</span>
+        <span>类型</span>
+        <span class="dz-c">允许 NULL</span>
+        <span>默认值</span>
+        <span>注释</span>
+        <span class="dz-c">自增</span>
+        <span class="dz-c">更新时</span>
+        <span class="dz-c">操作</span>
+      </div>
+
       <div class="dz-row dz-grid" v-for="(c, i) in columns" :key="i">
         <span class="dz-cell">
           <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
@@ -115,101 +115,8 @@ const isLastRow = i => i === props.columns.length - 1;
 </template>
 
 <style scoped>
-.dz-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.dz-count {
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.dz-hint {
-  color: var(--text-dim);
-  font-size: 12px;
-  line-height: 1.5;
-}
+/* 网格列宽：字段名 / 类型 / 允许NULL / 默认值 / 注释 / 自增 / 更新时 / 操作 */
 .dz-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 1.3fr 68px 1.1fr 1.3fr 44px 44px 84px;
-  gap: 8px;
-  align-items: center;
-}
-.dz-head {
-  padding: 0 4px 8px;
-  color: var(--text-dim);
-  font-size: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.dz-c {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dz-acts {
-  gap: 4px;
-}
-.dz-body {
-  max-height: 42vh;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-.dz-row {
-  padding: 6px 4px;
-  border-bottom: 1px dashed var(--line);
-}
-.dz-row input[type="text"] {
-  width: 100%;
-  min-width: 0;
-}
-.dz-cell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-.dz-key {
-  position: absolute;
-  right: 6px;
-  color: var(--cyan-soft);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  pointer-events: none;
-}
-.dz-mini {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(var(--overlay-rgb), .02);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.dz-mini:hover:not(:disabled) {
-  border-color: var(--line-strong);
-  color: var(--cyan);
-}
-.dz-mini:disabled {
-  opacity: .35;
-  cursor: default;
-}
-.dz-mini.dz-danger:hover {
-  border-color: var(--magenta);
-  color: var(--magenta);
-}
-.dz-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 12px;
+  grid-template-columns: 1.3fr 1.3fr 74px 1.1fr 1.3fr 46px 52px 88px;
 }
 </style>

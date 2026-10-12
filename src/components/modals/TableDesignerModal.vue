@@ -168,10 +168,11 @@ function close() {
   border-bottom: 1px solid var(--line);
 }
 .dz-tab {
-  padding: 8px 18px;
+  position: relative;
+  padding: 9px 20px;
   border: 1px solid transparent;
   border-bottom: none;
-  border-radius: 6px 6px 0 0;
+  border-radius: 8px 8px 0 0;
   background: none;
   color: var(--text-dim);
   font-family: var(--font-cjk);
@@ -182,16 +183,32 @@ function close() {
 }
 .dz-tab:hover {
   color: var(--text);
+  background: rgba(var(--cyan-rgb), .05);
 }
 .dz-tab.active {
   color: var(--cyan);
   border-color: var(--line-strong);
-  background: rgba(var(--cyan-rgb), .06);
+  background: rgba(var(--cyan-rgb), .08);
   box-shadow: inset 0 0 18px -10px var(--cyan);
 }
+.dz-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(var(--cyan-rgb), .8);
+}
+/* 面板外框：让字段 / 索引 / 外键 / 表选项四块内容有统一的承载容器 */
 .dz-panel {
   min-height: 180px;
   margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-solid);
 }
 .dz-sql-head {
   display: flex;
@@ -215,14 +232,19 @@ function close() {
   box-sizing: border-box;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-1);
-  color: var(--text);
+  border-radius: 10px;
+  background: rgba(var(--void-rgb), .55);
+  color: var(--editor-fg);
   font-family: var(--font-mono);
   font-size: 12.5px;
+  letter-spacing: 0;
   line-height: 1.6;
   outline: none;
   resize: vertical;
+  transition: border-color .18s, box-shadow .18s;
+}
+.dz-sql:hover {
+  border-color: var(--line-strong);
 }
 .dz-sql:focus {
   border-color: var(--cyan);
@@ -234,6 +256,8 @@ function close() {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .dz-actions .dz-hint {
   margin-right: auto;

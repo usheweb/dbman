@@ -49,17 +49,17 @@ function setRefColumns(fk, text) {
       <span class="dz-hint">本地列与被引用列需数量、类型一致；被引用列须有索引。可用列：{{ colNames.join(', ') || '无' }}</span>
     </div>
 
-    <div class="dz-head dz-grid">
-      <span>约束名</span>
-      <span>本地列</span>
-      <span>引用表</span>
-      <span>引用列</span>
-      <span>删除时</span>
-      <span>更新时</span>
-      <span class="dz-c">操作</span>
-    </div>
-
     <div class="dz-body">
+      <div class="dz-head dz-grid">
+        <span>约束名</span>
+        <span>本地列</span>
+        <span>引用表</span>
+        <span>引用列</span>
+        <span>删除时</span>
+        <span>更新时</span>
+        <span class="dz-c">操作</span>
+      </div>
+
       <div class="dz-row dz-grid" v-for="(fk, i) in foreignKeys" :key="i">
         <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
           v-model="fk.name" placeholder="fk_name" @input="touch">
@@ -89,81 +89,8 @@ function setRefColumns(fk, text) {
 </template>
 
 <style scoped>
-.dz-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-.dz-count {
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.dz-hint {
-  color: var(--text-dim);
-  font-size: 12px;
-  line-height: 1.5;
-}
+/* 网格列宽：约束名 / 本地列 / 引用表 / 引用列 / 删除时 / 更新时 / 操作 */
 .dz-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 1.1fr 1.1fr 1.1fr 104px 104px 44px;
-  gap: 8px;
-  align-items: center;
-}
-.dz-head {
-  padding: 0 4px 8px;
-  color: var(--text-dim);
-  font-size: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.dz-c {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dz-acts {
-  gap: 4px;
-}
-.dz-body {
-  max-height: 42vh;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-.dz-row {
-  padding: 6px 4px;
-  border-bottom: 1px dashed var(--line);
-}
-.dz-row input[type="text"],
-.dz-row select {
-  width: 100%;
-  min-width: 0;
-}
-.dz-mini {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(var(--overlay-rgb), .02);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--text-dim);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.dz-mini.dz-danger:hover {
-  border-color: var(--magenta);
-  color: var(--magenta);
-}
-.dz-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 12px;
+  grid-template-columns: 1.1fr 1.1fr 1.1fr 1.1fr 104px 104px 64px;
 }
 </style>
