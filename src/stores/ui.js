@@ -23,6 +23,7 @@ export const useUiStore = defineStore('ui', () => {
     sqlFavModal: false,
     favEditModal: false,
     aiConfigModal: false,
+    viewSettingsModal: false,
     promoModal: false
   });
 
@@ -41,11 +42,32 @@ export const useUiStore = defineStore('ui', () => {
   // 表列表排序键（可多列组合），持久化
   const tableSort = ref(DEFAULT_TABLE_SORT.map(k => ({ ...k })));
 
+  // 视图显示选项：表列表里是否显示表注释 / 数据行数与大小 + SQL 编辑器是否折叠，持久化
+  const viewOpts = ref({ tableComment: true, tableMeta: true, sqlCollapsed: false });
+
+  // 结果区全屏：把窗口让给结果表，只对当前会话有效，不持久化
+  const resultFullscreen = ref(false);
+
   function init() {
     Object.assign(panelState.value, store.get('dbman_panel_state') || {});
     Object.assign(exportOpts.value, store.get('dbman_export_opts') || {});
+    Object.assign(viewOpts.value, store.get('dbman_view_opts') || {});
     const saved = normalizeSortKeys(store.get('dbman_table_sort'));
     tableSort.value = saved.length ? saved : DEFAULT_TABLE_SORT.map(k => ({ ...k }));
+  }
+
+  function saveViewOpts(opts) {
+    viewOpts.value = { ...viewOpts.value, ...opts };
+    store.set('dbman_view_opts', { ...viewOpts.value });
+  }
+
+  // 折叠 / 展开 SQL 编辑器，把纵向空间让给结果区
+  function toggleSqlCollapsed() {
+    saveViewOpts({ sqlCollapsed: !viewOpts.value.sqlCollapsed });
+  }
+
+  function toggleResultFullscreen() {
+    resultFullscreen.value = !resultFullscreen.value;
   }
 
   function saveTableSort(keys) {
@@ -111,6 +133,10 @@ export const useUiStore = defineStore('ui', () => {
     contentValue,
     connModalTarget,
     tableSort,
+    viewOpts,
+    resultFullscreen,
+    toggleSqlCollapsed,
+    toggleResultFullscreen,
     init,
     togglePanel,
     setPanel,
@@ -120,6 +146,7 @@ export const useUiStore = defineStore('ui', () => {
     showToast,
     saveExportOpts,
     saveTableSort,
+    saveViewOpts,
     openContent,
     openConnectionModal
   };

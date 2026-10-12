@@ -63,12 +63,29 @@ export function redisInfo(connId) {
   return invoke('redis_info', { connId });
 }
 
-export function redisKeys(connId, pattern) {
-  return invoke('redis_keys', { connId, pattern: pattern || '*' });
+// cursor 为 SCAN 游标，0 表示从第一页开始；返回 { cursor, total, keys }
+export function redisKeys(connId, pattern, cursor = 0) {
+  return invoke('redis_keys', { connId, pattern: pattern || '*', cursor });
 }
 
 export function redisGet(connId, key) {
   return invoke('redis_get', { connId, key });
+}
+
+export function redisSelectDb(connId, db) {
+  return invoke('redis_select_db', { connId, db });
+}
+
+export function redisDatabases(connId) {
+  return invoke('redis_databases', { connId });
+}
+
+export function redisSetTtl(connId, key, ttl) {
+  return invoke('redis_set_ttl', { connId, key, ttl });
+}
+
+export function redisSetValue(connId, key, value) {
+  return invoke('redis_set_value', { connId, key, value });
 }
 
 // ===== AI：大模型生成 SQL =====

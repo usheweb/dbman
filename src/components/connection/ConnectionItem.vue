@@ -18,10 +18,10 @@ const menuVisible = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
 
-// 只有当前已连上的那条才给「断开连接」
+// 只有已打开（有 tab）的那条才给「断开连接」
 const menuItems = computed(() => {
   const items = [{ label: '编辑', value: 'edit' }, { label: '删除', value: 'remove', danger: true }];
-  if (props.conn.id === connStore.currentConnId) items.push({ label: '断开连接', value: 'disconnect', danger: true });
+  if (connStore.isOpen(props.conn.id)) items.push({ label: '断开连接', value: 'disconnect', danger: true });
   return items;
 });
 
@@ -39,7 +39,7 @@ function onMenuSelect(item) {
   } else if (val === 'remove') {
     if (confirm('确定要删除这个连接吗？')) connStore.removeConnection(props.conn.id);
   } else if (val === 'disconnect') {
-    connStore.disconnectFromUi();
+    connStore.closeTab(props.conn.id);
   }
 }
 </script>

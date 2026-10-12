@@ -216,8 +216,8 @@ function onMenuSelect(item) {
         <ItemIcon name="table" />
         <span class="tree-table-body">
           <span class="tree-table-name">{{ t.tableName }}</span>
-          <span v-if="t.tableComment" class="tree-table-comment">{{ t.tableComment }}</span>
-          <span v-if="metaOf(t)" class="tree-table-meta" :title="metaOf(t)">{{ metaOf(t) }}</span>
+          <span v-if="ui.viewOpts.tableComment && t.tableComment" class="tree-table-comment">{{ t.tableComment }}</span>
+          <span v-if="ui.viewOpts.tableMeta && metaOf(t)" class="tree-table-meta" :title="metaOf(t)">{{ metaOf(t) }}</span>
         </span>
       </div>
     </div>
@@ -231,24 +231,3 @@ function onMenuSelect(item) {
     />
   </div>
 </template>
-
-<style scoped>
-/* 侧栏库切换下拉：对齐原 .db-switcher 的紧凑外观（等宽字体 + 青色） */
-.db-picker {
-  width: 100%;
-}
-
-.db-picker :deep(.icon-select-trigger) {
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: var(--cyan);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: .5px;
-}
-
-.db-picker :deep(.icon-select-caret) {
-  color: var(--cyan);
-  opacity: .7;
-}
-</style>

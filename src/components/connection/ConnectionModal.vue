@@ -13,11 +13,18 @@ const DB_TYPES = [
   { value: 'redis', label: 'Redis', icon: 'redis' }
 ];
 
+// 各类型的默认端口：MySQL 3306，Redis 6379
+const DEFAULT_PORTS = { mysql: 3306, redis: 6379 };
+
+function defaultPort(type) {
+  return DEFAULT_PORTS[type] || 3306;
+}
+
 const form = reactive({
   name: '',
   type: 'mysql',
   host: '',
-  port: 3306,
+  port: defaultPort('mysql'),
   user: '',
   password: '',
   database: '',
@@ -36,7 +43,7 @@ function fillForm() {
   form.name = conn ? conn.name : '';
   form.type = conn ? conn.type : 'mysql';
   form.host = conn ? conn.host : '';
-  form.port = conn ? conn.port : 3306;
+  form.port = conn && conn.port ? conn.port : defaultPort(form.type);
   form.user = conn ? conn.user : '';
   form.password = conn ? conn.password : '';
   form.database = conn ? (conn.database || '') : '';
@@ -64,10 +71,11 @@ watch(
   }
 );
 
-// 切换类型时若端口为空，补默认端口（与原 toggleDBOptions 一致）
+// 切换类型时同步端口：仍是上个类型的默认端口（说明用户没手填过）才跟着换，手填过的值保留
 function onTypeChange(type) {
+  const prevDefault = defaultPort(form.type);
+  if (!form.port || Number(form.port) === prevDefault) form.port = defaultPort(type);
   form.type = type;
-  if (!form.port) form.port = type === 'mysql' ? 3306 : 6379;
 }
 
 function buildSsh() {
@@ -98,9 +106,10 @@ function buildPayload() {
   };
 }
 
-// 用户名必须填：留空时 MySQL 会按匿名账号登录，只能看到 information_schema 等极少数库
+// 用户名必填只针对 MySQL：留空时 MySQL 会按匿名账号登录，只能看到 information_schema 等极少数库。
+// Redis 走密码认证（后端固定不带用户名），所以不校验用户名。
 function validate() {
-  if (!form.user.trim()) {
+  if (form.type === 'mysql' && !form.user.trim()) {
     ui.showToast('请填写用户名（MySQL 一般填 root）', 'error');
     return false;
   }
@@ -170,7 +179,8 @@ function onSave() {
         <div class="form-row">
           <div class="form-group">
             <label>用户名</label>
-            <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" v-model="form.user" required placeholder="如：root">
+            <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" v-model="form.user"
+              :required="form.type === 'mysql'" :placeholder="form.type === 'mysql' ? '如：root' : '可留空'">
           </div>
           <div class="form-group">
             <label>密码</label>

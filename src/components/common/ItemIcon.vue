@@ -31,6 +31,56 @@ const ICONS = {
     + '<path d="M7.6 7.6 12.7 12.7"/>'
     + '<path d="M10 10 11.6 8.4"/>'
     + '<path d="M11.6 11.6 13 10.2"/>'
+    + '</svg>',
+  // Redis key 类型图标：string / list / set / zset / hash / stream，未知类型用键图形
+  // string：引号
+  'rkey-string':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M6.3 4.9 5.2 7.6"/>'
+    + '<path d="M6.3 4.9c1 0 1.6.8 1.6 2v2.2"/>'
+    + '<path d="M10 4.9 8.9 7.6"/>'
+    + '<path d="M10 4.9c1 0 1.6.8 1.6 2v2.2"/>'
+    + '</svg>',
+  // list：项目符号列表
+  'rkey-list':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M3.4 5h.01M3.4 8h.01M3.4 11h.01"/>'
+    + '<path d="M6.6 5h6.2M6.6 8h6.2M6.6 11h6.2"/>'
+    + '</svg>',
+  // set：散落的点（无序）
+  'rkey-set':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="5.2" cy="5.4" r="1.5"/>'
+    + '<circle cx="10.8" cy="5.4" r="1.5"/>'
+    + '<circle cx="8" cy="10.6" r="1.5"/>'
+    + '</svg>',
+  // zset：带分值的升序点（有序）
+  'rkey-zset':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="4.3" cy="11.3" r="1.5"/>'
+    + '<circle cx="8" cy="8" r="1.5"/>'
+    + '<circle cx="11.7" cy="4.7" r="1.5"/>'
+    + '</svg>',
+  // hash：井号
+  'rkey-hash':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M6.2 3.4 5 12.6"/>'
+    + '<path d="M11 3.4 9.8 12.6"/>'
+    + '<path d="M3.8 6.2h8.6"/>'
+    + '<path d="M3.4 9.8h8.6"/>'
+    + '</svg>',
+  // stream：脉冲折线
+  'rkey-stream':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M2.3 8.5h2.4l1.5-3.7 2 7 1.6-4.6 1.2 2.6h2.7"/>'
+    + '</svg>',
+  // 未知类型：复用钥匙图形
+  'rkey-none':
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="5.6" cy="5.6" r="2.7"/>'
+    + '<path d="M7.6 7.6 12.7 12.7"/>'
+    + '<path d="M10 10 11.6 8.4"/>'
+    + '<path d="M11.6 11.6 13 10.2"/>'
     + '</svg>'
 };
 

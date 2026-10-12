@@ -1,6 +1,6 @@
 // 工作区：SQL 编辑器实例 + 结果集 + 显示模式 + 查找 + 分页 + 导出
 import { defineStore } from 'pinia';
-import { ref, shallowRef, computed } from 'vue';
+import { ref, shallowRef, computed, watch } from 'vue';
 import * as api from '@/api';
 import { useStoreStore } from './store';
 import { useUiStore } from './ui';
@@ -23,6 +23,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // CodeMirror 实例：必须 shallowRef，Vue 深代理会破坏 CM 内部结构
   const editor = shallowRef(null);
+
+  // 当前连接的 SQL 草稿：编辑器是全局单实例，切换连接时靠它换入换出
+  const draftSql = ref('');
+
+  // 各连接的工作区快照（非响应式，仅在切换连接时存取）
+  const snapshots = {};
 
   const lastSql = ref('');
   const lastResult = ref(null); // { data, fields, colInfo }
@@ -50,8 +56,68 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // ===== 编辑器 =====
   function setEditor(cm) { editor.value = cm; }
-  function getSql() { return editor.value ? editor.value.getValue() : ''; }
-  function setSql(sql) { if (editor.value) editor.value.setValue(sql); }
+  function getSql() { return editor.value ? editor.value.getValue() : draftSql.value; }
+  function setSql(sql) {
+    draftSql.value = sql;
+    if (editor.value) editor.value.setValue(sql);
+  }
+
+  // 编辑器（重新）挂载后，把当前连接的草稿灌进去
+  function applyDraft() {
+    if (editor.value) editor.value.setValue(draftSql.value);
+  }
+
+  // ===== 多连接：按连接存取工作区状态 =====
+  const IDLE_PAGE = () => ({ hasMore: false, paged: true, elapsed: 0, rows: 0, idle: true, write: false, error: '' });
+
+  function snapshot() {
+    return {
+      lastSql: lastSql.value,
+      lastResult: lastResult.value,
+      columnModes: columnModes.value,
+      findState: findState.value,
+      matchCells: matchCells.value,
+      pageNo: pageNo.value,
+      pageInfo: pageInfo.value,
+      sql: getSql()
+    };
+  }
+
+  function resetWorkspace() {
+    lastSql.value = '';
+    lastResult.value = null;
+    columnModes.value = {};
+    resetFindState();
+    pageNo.value = 1;
+    pageInfo.value = IDLE_PAGE();
+    draftSql.value = '';
+    if (editor.value) editor.value.setValue('');
+  }
+
+  function restore(s) {
+    lastSql.value = s.lastSql || '';
+    lastResult.value = s.lastResult || null;
+    columnModes.value = s.columnModes || {};
+    findState.value = s.findState || { keyword: '', only: true, index: -1 };
+    matchCells.value = s.matchCells || [];
+    pageNo.value = s.pageNo || 1;
+    pageInfo.value = s.pageInfo || IDLE_PAGE();
+    draftSql.value = s.sql || '';
+    if (editor.value) editor.value.setValue(s.sql || '');
+  }
+
+  // 切换 tab：先存下离开的连接，再换入目标连接（没有快照就清空）
+  watch(() => conn.currentConnId, (nid, oid) => {
+    if (oid) snapshots[oid] = snapshot();
+    if (nid && snapshots[nid]) restore(snapshots[nid]);
+    else resetWorkspace();
+  });
+
+  // 连接关闭后一并丢弃其快照，避免重开同一连接时冒出旧内容
+  watch(() => conn.openIds, ids => {
+    const keep = new Set(ids);
+    Object.keys(snapshots).forEach(k => { if (!keep.has(k)) delete snapshots[k]; });
+  });
 
   // ===== 列注释 / 显示模式 =====
   function currentColComments() {
@@ -185,11 +251,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const matchCount = computed(() => matchCells.value.length);
 
   // ===== 查询执行 =====
-  function resetPageState() {
-    pageNo.value = 1;
-    pageInfo.value = { hasMore: false, paged: true, elapsed: 0, rows: 0, idle: true, write: false, error: '' };
-  }
-
   // 分页时多取一行，用来判断是否还有下一页（不用额外查 COUNT）
   async function fetchRows(sql, page) {
     return conn.withRetry(id => api.mysqlQuery(
@@ -271,7 +332,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function gotoPage(page) {
     if (!pageInfo.value.paged || page < 1) return;
     if (page > pageNo.value && !pageInfo.value.hasMore) return;
-    reloadPage(page);
+    return reloadPage(page);
   }
 
   function changePageSize(value) {
@@ -500,16 +561,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   return {
-    editor, lastSql, lastResult, columnModes, globalDisplay,
+    editor, draftSql, lastSql, lastResult, columnModes, globalDisplay,
     pageSize, pageNo, pageInfo, findState, matchCells, matchCount,
     execConfirm, filterDialog,
     resultColumns, columnModesForRender, visibleRowIndexes,
     MODE_LABEL,
-    init, setEditor, getSql, setSql, setSqlAndRun,
+    init, setEditor, getSql, setSql, setSqlAndRun, applyDraft,
     currentColComments, effectiveColumnMode, applyDisplayMode, analyzeColumns,
     toggleGlobalMode, toggleColumnMode,
     rowHit, cellHit, recomputeMatches,
-    executeQuery, reloadPage, gotoPage, changePageSize, resetPageState,
+    executeQuery, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
     openFilterDialog, closeFilterDialog, applyFilter,

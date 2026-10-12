@@ -1,6 +1,6 @@
 <script setup>
 // SQL 编辑器：CodeMirror 5 实例 + 编辑器工具栏
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
 import CodeMirror from 'codemirror';
 import 'codemirror/mode/sql/sql.js';
 import 'codemirror/addon/hint/show-hint.js';
@@ -52,8 +52,8 @@ onMounted(() => {
     if (!typed || typed.length !== 1 || !/[\w.]/.test(typed)) return;
     showSqlHint(instance, conn);
   });
-  cm.setValue('');
-  ws.resetPageState();
+  // 编辑器是全局单实例：切连接会重建，这里把当前连接的 SQL 草稿灌回去
+  ws.applyDraft();
 });
 
 // 主题切换时同步 CodeMirror 皮肤（实例只初始化一次，这里改 option 即可）
@@ -114,19 +114,57 @@ async function openSqlFile() {
     ui.showToast(String(e.message || e), 'error');
   }
 }
+
+// 折叠编辑器 / 结果区全屏都会让 CodeMirror 容器消失再出现，恢复后刷新一下，避免内容空白或光标错位
+watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
+  nextTick(() => { if (cm) cm.refresh(); });
+});
 </script>
 
 <template>
-  <div class="query-editor">
+  <div class="query-editor" :class="{ collapsed: ui.viewOpts.sqlCollapsed }">
     <div class="editor-header">
       <span>SQL编辑器</span>
       <div class="editor-toolbar">
-        <button class="btn btn-secondary" @click="openSqlFile">打开 SQL 文件</button>
-        <button class="btn btn-secondary" @click="ui.openModal('sqlFavModal')">SQL 收藏列表</button>
-        <button class="btn btn-secondary" @click="ui.openModal('sqlLogModal')">SQL 日志列表</button>
-        <button class="btn btn-secondary" @click="openFavFromEditor">☆ 收藏</button>
-        <button class="btn btn-secondary" @click="onFormat">格式化</button>
+        <button class="icon-btn" title="打开 SQL 文件" @click="openSqlFile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+        </button>
+        <button class="icon-btn" title="SQL 收藏列表" @click="ui.openModal('sqlFavModal')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" />
+          </svg>
+        </button>
+        <button class="icon-btn" title="SQL 日志列表" @click="ui.openModal('sqlLogModal')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+            <path d="M3 4v4h4" />
+            <path d="M12 7.5V12l3 1.8" />
+          </svg>
+        </button>
+        <button class="icon-btn" title="收藏当前 SQL" @click="openFavFromEditor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.8l5.8-.9z" />
+          </svg>
+        </button>
+        <button class="icon-btn" title="格式化 SQL" @click="onFormat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16" />
+            <path d="M4 12h9" />
+            <path d="M4 18h14" />
+          </svg>
+        </button>
         <button class="btn" @click="ws.executeQuery()">执行 (Ctrl+Enter)</button>
+        <button
+          class="icon-btn"
+          :title="ui.viewOpts.sqlCollapsed ? '展开 SQL 编辑器' : '收起 SQL 编辑器，把空间让给结果区'"
+          @click="ui.toggleSqlCollapsed()"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path :d="ui.viewOpts.sqlCollapsed ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'" />
+          </svg>
+        </button>
       </div>
     </div>
     <textarea autocapitalize="off" autocorrect="off" spellcheck="false" ref="ta"></textarea>

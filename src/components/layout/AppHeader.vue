@@ -1,11 +1,43 @@
 <script setup>
-import { useConnectionStore } from '@/stores/connection';
+import { ref } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useThemeStore } from '@/stores/theme';
+import ContextMenu from '@/components/common/ContextMenu.vue';
+import ConnectionTabs from '@/components/layout/ConnectionTabs.vue';
 
-const conn = useConnectionStore();
 const ui = useUiStore();
 const theme = useThemeStore();
+
+// 「设置」菜单：AI 设置 / 视图设置
+const settingsVisible = ref(false);
+const settingsBtnEl = ref(null);
+const settingsX = ref(0);
+const settingsY = ref(0);
+
+const settingsItems = [
+  { label: 'AI 设置', value: 'ai' },
+  { label: '视图设置', value: 'view' }
+];
+
+function openSettingsMenu() {
+  if (settingsVisible.value) {
+    settingsVisible.value = false;
+    return;
+  }
+  const rect = settingsBtnEl.value && settingsBtnEl.value.getBoundingClientRect();
+  if (rect) {
+    settingsX.value = rect.left;
+    settingsY.value = rect.bottom + 6;
+  }
+  settingsVisible.value = true;
+}
+
+function onSettingsSelect(item) {
+  settingsVisible.value = false;
+  if (!item) return;
+  if (item.value === 'ai') ui.openModal('aiConfigModal');
+  else if (item.value === 'view') ui.openModal('viewSettingsModal');
+}
 </script>
 
 <template>
@@ -14,16 +46,18 @@ const theme = useThemeStore();
       <img class="brand-logo" src="@/assets/logo.svg" alt="">
       <h1>DBMan</h1>
     </div>
+    <ConnectionTabs />
     <div class="header-right">
-      <button class="btn btn-secondary btn-sm" @click="ui.openModal('aiConfigModal')">AI 设置</button>
-      <div id="connectionStatus">
-        <template v-if="conn.isConnected">
-          <span class="conn-ok">✓ 已连接: {{ conn.currentConnData.name }}</span>
-          <button class="disconnect-btn" @click="conn.disconnectFromUi()">断开连接</button>
-        </template>
-      </div>
+      <ContextMenu
+        v-if="settingsVisible"
+        :x="settingsX"
+        :y="settingsY"
+        :items="settingsItems"
+        @select="onSettingsSelect"
+        @close="settingsVisible = false"
+      />
       <button
-        class="theme-toggle"
+        class="icon-btn theme-toggle"
         :title="theme.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
         @click="theme.toggle()"
       >
@@ -34,6 +68,20 @@ const theme = useThemeStore();
         </svg>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      </button>
+      <button
+        ref="settingsBtnEl"
+        class="icon-btn"
+        :class="{ open: settingsVisible }"
+        title="设置"
+        @mousedown.stop
+        @click.stop="openSettingsMenu"
+      >
+        <!-- 齿轮图标，与右侧主题切换按钮同一套图标按钮样式 -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.35.4.64.73.83.3.18.65.27 1 .27H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       </button>
     </div>
@@ -54,41 +102,7 @@ const theme = useThemeStore();
   filter: drop-shadow(0 0 10px rgba(var(--cyan-rgb), .35));
 }
 
-.conn-ok {
-  color: var(--green);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  text-shadow: 0 0 12px rgba(var(--green-rgb), .6);
-}
-
-/* 主题切换：亮色显示月亮、暗色显示太阳，图标随主题变化 */
-.theme-toggle {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all .2s ease;
-}
-
-.theme-toggle:hover {
-  color: var(--cyan);
-  border-color: var(--line-strong);
-  box-shadow: var(--glow-cyan);
-}
-
-.theme-toggle svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
+/* 图标按钮样式见 theme.css 的 .icon-btn */
 
 .header-right {
   display: flex;

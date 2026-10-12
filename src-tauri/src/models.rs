@@ -231,6 +231,23 @@ pub struct RedisInfo {
 }
 
 #[derive(Debug, Serialize)]
+pub struct RedisKey {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+}
+
+// 一页 key：SCAN 游标分页的返回体
+#[derive(Debug, Serialize)]
+pub struct RedisKeyPage {
+    /// 下一页的游标，0 表示已经扫到末尾
+    pub cursor: u64,
+    /// 当前库的 key 总数（DBSIZE，与 pattern 无关，用于界面展示规模）
+    pub total: u64,
+    pub keys: Vec<RedisKey>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct RedisValue {
     #[serde(rename = "type")]
     pub r#type: String,

@@ -1,6 +1,6 @@
 <script setup>
 // 结果区底部状态栏：分页 + 每页显示 + 执行状态 + 数据导出
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useUiStore } from '@/stores/ui';
 import { escapeHtml } from '@/utils/escape';
@@ -28,6 +28,37 @@ const pageSizeOptions = [100, 300, 1000, 3000];
 function onChangePageSize(e) {
   ws.changePageSize(e.target.value);
 }
+
+// ===== 页码输入框：可直接输入页码跳转 =====
+const pageInput = ref(String(ws.pageNo));
+watch(() => ws.pageNo, v => { pageInput.value = String(v); });
+
+function onPageInput(e) {
+  pageInput.value = e.target.value.replace(/\D/g, '');
+}
+
+async function commitPage() {
+  const before = ws.pageNo;
+  const n = parseInt(pageInput.value, 10);
+  if (!ws.pageInfo.paged || !n || n < 1 || n === before) {
+    pageInput.value = String(before);
+    return;
+  }
+  // 总页数未知（分页靠多取一行判断），向前跳只允许到已确认还有数据的页
+  if (n > before && !ws.pageInfo.hasMore) {
+    pageInput.value = String(before);
+    ui.showToast('已经是最后一页了', 'error');
+    return;
+  }
+  await ws.gotoPage(n);
+  const p = ws.pageInfo;
+  // 跳到超出数据的页码会返回 0 行，回退到原来的页并提示
+  if (n > before && ws.pageNo === n && !p.error && !p.write && p.rows === 0) {
+    await ws.gotoPage(before);
+    ui.showToast(`第 ${n} 页没有数据`, 'error');
+  }
+  pageInput.value = String(ws.pageNo);
+}
 </script>
 
 <template>
@@ -39,7 +70,20 @@ function onChangePageSize(e) {
         :disabled="!ws.pageInfo.paged || ws.pageNo <= 1"
         @click="ws.gotoPage(ws.pageNo - 1)"
       >‹</button>
-      <span class="page-no">{{ ws.pageNo }}</span>
+      <input
+        class="page-input"
+        type="text"
+        inputmode="numeric"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        :disabled="!ws.pageInfo.paged"
+        :title="ws.pageInfo.paged ? '输入页码后回车跳转' : 'SQL 自带 LIMIT 或不是查询语句，未启用分页'"
+        :value="pageInput"
+        @input="onPageInput"
+        @keyup.enter="commitPage"
+        @blur="commitPage"
+      />
       <button
         class="page-btn"
         title="下一页"
