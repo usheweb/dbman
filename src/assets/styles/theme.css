@@ -971,18 +971,34 @@
             flex: 0 0 auto;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 7px;
             max-width: 200px;
-            padding: 7px 22px 7px 12px;
+            padding: 7px 10px 7px 11px;
             background: rgba(var(--ink-4-rgb), .5);
             border: 1px solid var(--line);
-            border-radius: 8px;
+            border-radius: 9px;
             color: var(--text-dim);
             font-family: var(--font-ui);
             font-size: 13px;
+            letter-spacing: .3px;
             cursor: pointer;
             white-space: nowrap;
-            transition: all .18s ease;
+            transition: background .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
+        }
+        /* 选中态底部的一道光条：比整块高亮更克制，也更像「当前标签」 */
+        .conn-tab::after {
+            content: '';
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            bottom: 3px;
+            height: 2px;
+            border-radius: 2px;
+            background: linear-gradient(90deg, var(--cyan), var(--accent-bright));
+            box-shadow: 0 0 10px rgba(var(--cyan-rgb), .75);
+            opacity: 0;
+            transform: scaleX(.35);
+            transition: opacity .2s ease, transform .2s ease;
         }
         .conn-tab:hover {
             background: var(--hover-bg);
@@ -990,30 +1006,42 @@
             border-color: var(--hover-line);
         }
         .conn-tab.active {
-            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .18), transparent);
+            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .16), rgba(var(--cyan-rgb), .04));
             color: var(--cyan);
-            border-color: var(--line-strong);
+            border-color: rgba(var(--cyan-rgb), .45);
             box-shadow: var(--glow-cyan);
         }
+        .conn-tab.active::after {
+            opacity: 1;
+            transform: scaleX(1);
+        }
+        .conn-tab.active:hover {
+            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .24), rgba(var(--cyan-rgb), .08));
+        }
         .conn-tab-name {
+            flex: 0 1 auto;
+            min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* 关闭按钮：贴在按钮右上角 */
+        /* 关闭按钮：默认隐去，悬停或选中该标签时才出现，减少视觉噪音 */
         .conn-tab-close {
-            position: absolute;
-            top: 2px;
-            right: 3px;
+            flex: 0 0 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            border-radius: 5px;
             font-size: 13px;
             line-height: 1;
             color: var(--text-dim);
-            transition: all .15s ease;
+            opacity: 0;
+            transition: opacity .16s ease, background .16s ease, color .16s ease;
+        }
+        .conn-tab:hover .conn-tab-close,
+        .conn-tab.active .conn-tab-close {
+            opacity: 1;
         }
         .conn-tab-close:hover {
             background: rgba(var(--magenta-rgb), .18);
@@ -1153,6 +1181,42 @@
             flex-direction: column;
             overflow: hidden;
         }
+        /* 查询 Tab 条：每个连接一组查询 Tab，样式复用顶部 .conn-tab，只换容器与新增按钮 */
+        .query-tabs-bar {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        .query-tab-add {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            background: rgba(var(--ink-4-rgb), .5);
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: background .18s ease, color .18s ease, border-color .18s ease;
+        }
+        .query-tab-add:hover {
+            background: var(--hover-bg);
+            color: var(--cyan);
+            border-color: var(--hover-line);
+        }
+        .query-tab-add svg {
+            width: 14px;
+            height: 14px;
+        }
         .query-editor {
             height: 40%;
             min-height: 150px;
@@ -1169,10 +1233,11 @@
         .query-editor.collapsed .CodeMirror {
             display: none;
         }
-        /* 结果区全屏：隐藏顶栏、连接侧栏、AI 生成栏与 SQL 编辑器，把窗口让给结果表 */
+        /* 结果区全屏：隐藏顶栏、连接侧栏、AI 生成栏、查询 Tab 条与 SQL 编辑器，把窗口让给结果表 */
         .app-container.result-fs .header,
         .app-container.result-fs .sidebar,
         .app-container.result-fs .ai-bar,
+        .app-container.result-fs .query-tabs-bar,
         .app-container.result-fs .query-editor {
             display: none;
         }
@@ -1292,6 +1357,8 @@
             letter-spacing: 0;
             white-space: nowrap;
             transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
+            /* 鼠标移开后延迟 2s 再收起文字：扫过按钮时不至于一闪一收 */
+            transition-delay: 2s;
         }
         .editor-toolbar .icon-btn:hover .btn-label,
         .editor-toolbar .icon-btn:focus-visible .btn-label,
@@ -1302,6 +1369,8 @@
             max-width: 160px;
             opacity: 1;
             margin-left: 6px;
+            /* 展开要即时，延迟只作用于收起 */
+            transition-delay: 0s;
         }
         /* 快捷键小标签：跟随 .btn-label 一起展开 */
         .icon-btn .btn-label .kbd {
@@ -1341,9 +1410,9 @@
             background: var(--gutter-bg) !important;
             border-right: 1px solid var(--line) !important;
         }
-        /* 行内「执行这一行」：行号左侧的播放按钮，默认隐藏，鼠标移到该行 gutter 上才浮现 */
+        /* 行内「执行这一行」：行号左侧的播放按钮，仅光标所在行显示 */
         .CodeMirror-gutter.run-gutter {
-            width: 18px;
+            width: 20px;
             cursor: pointer;
         }
         /* gutter 容器自身高度为 0（子元素全是绝对定位），这里撑满行高，
@@ -1352,36 +1421,63 @@
             top: 0;
             bottom: 0;
         }
-        /* 每行的 gutter 元素（非行号那个）撑满行高并居中按钮 */
+        /* 每行的 gutter 元素（非行号那个）横向铺满整条行号栏并居中按钮：
+           栏宽 = 执行列 + 行号列（随行号位数变化），由 SqlEditor.vue 实测写入 --cm-gutter-w */
         .query-editor .CodeMirror-gutter-wrapper > .CodeMirror-gutter-elt:not(.CodeMirror-linenumber) {
             top: 0;
             bottom: 0;
+            left: 0 !important;
+            width: var(--cm-gutter-w, 49px) !important;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
         }
+        /* 行号永远压在按钮之上：多位行号（如 100）与按钮圆环有重叠，行号要保证清晰可读 */
+        .query-editor .CodeMirror-linenumber {
+            z-index: 1;
+        }
+        /* 「执行这一行」按钮：圆形描边播放键，只有光标所在行（active-line 加在 gutter 上）才浮现 */
         .run-gutter-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            opacity: 0;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            border: 1px solid rgba(var(--cyan-rgb), .5);
+            /* 常态不填充，避免与行号重叠处着色影响数字辨识 */
+            background: transparent;
             color: var(--cyan);
-            transition: opacity .15s ease, background .15s ease;
+            opacity: 0;
+            transform: scale(.75);
+            cursor: pointer;
+            transition: opacity .15s ease, transform .15s ease, background .15s ease, box-shadow .15s ease;
         }
         .run-gutter-btn svg {
-            width: 13px;
-            height: 13px;
+            width: 9px;
+            height: 9px;
             display: block;
+            /* 播放三角形重心偏左，右移半像素做视觉居中 */
+            margin-left: 1px;
         }
-        /* 鼠标移到该行任意位置（代码区或行号区）都浮现播放按钮，避免只有 18px 的 gutter 条能命中 */
-        .query-editor .CodeMirror-code > div:hover .run-gutter-btn,
-        .query-editor .CodeMirror-gutter-wrapper > .CodeMirror-gutter-elt:not(.CodeMirror-linenumber):hover .run-gutter-btn {
+        .CodeMirror-activeline-gutter .run-gutter-btn {
             opacity: 1;
-            background: rgba(var(--cyan-rgb), .14);
+            transform: scale(1);
+        }
+        /* 光标停在空行（没有可执行的 SQL）时：不显示执行按钮，也不让它响应点击 */
+        .query-editor .CodeMirror.cursor-line-empty .CodeMirror-activeline-gutter .run-gutter-btn {
+            opacity: 0;
+            transform: scale(.75);
+            pointer-events: none;
+        }
+        .run-gutter-btn:hover {
+            background: rgba(var(--cyan-rgb), .26);
+            box-shadow: 0 0 8px -1px rgba(var(--cyan-rgb), .75);
+        }
+        /* 光标所在行：极淡青色底 + 左侧竖条，与执行按钮呼应 */
+        .query-editor .CodeMirror-activeline-background {
+            background: rgba(var(--cyan-rgb), .05);
+            box-shadow: inset 2px 0 0 var(--cyan);
         }
         /* SQL 补全下拉（跟随 Dark Sci-Fi 主题，覆盖 addon 默认的浅色样式） */
         .CodeMirror-hints {
@@ -1537,11 +1633,19 @@
             letter-spacing: 1px;
             text-transform: none;
             box-shadow: inset 0 -1px 0 rgba(var(--cyan-rgb), .35);
+            /* 表头只用来点选整列：Shift 连选时不许出现原生文本选中（否则标题文字被拉出蓝色高亮） */
+            user-select: none;
         }
         .data-table td {
             background: rgba(var(--ink-rgb), .45);
             cursor: pointer;
             transition: background .15s;
+        }
+        /* 拖动框选单元格期间屏蔽原生文本选中，避免拉出蓝色文字高亮 */
+        .data-table.dragging,
+        .data-table.dragging td,
+        .data-table.dragging th {
+            user-select: none;
         }
         .data-table tbody tr:hover td {
             background: rgba(var(--cyan-rgb), .08);
@@ -2351,4 +2455,383 @@
             font-family: var(--font-cjk);
             font-size: 15px;
             letter-spacing: 1px;
+        }
+
+        /* ===== 查询结果表：行号列 / 行列选中 / 待保存的修改 ===== */
+        .data-table th.row-head,
+        .data-table td.row-head {
+            width: 58px;
+            min-width: 58px;
+            max-width: 58px;
+            padding: 10px 8px;
+            text-align: right;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+        /* 行号列横向粘住；表头那一格再叠纵向粘住，所以层级要高于其它表头 */
+        .data-table th.row-head {
+            left: 0;
+            z-index: 4;
+            cursor: default;
+        }
+        .data-table td.row-head {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            /* 要挡住从下方滚过来的数据，底色必须是不透明的 */
+            background: var(--panel-solid);
+        }
+        .data-table tbody tr:hover td.row-head {
+            background: linear-gradient(rgba(var(--cyan-rgb), .08), rgba(var(--cyan-rgb), .08)), var(--panel-solid);
+        }
+        .data-table tbody tr td.row-head.row-selected {
+            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .32), rgba(var(--cyan-rgb), .14)), var(--panel-solid);
+            color: var(--cyan);
+            box-shadow: inset 0 0 0 1px var(--line-strong);
+        }
+        /* 已暂存、尚未提交的单元格修改：写入库里的分别是空白字符串 / NULL / 手输的新值 */
+        .data-table tbody tr td.cell-pending-empty,
+        .data-table tbody tr td.cell-pending-null,
+        .data-table tbody tr td.cell-pending-value {
+            background: linear-gradient(180deg, rgba(var(--magenta-rgb), .3), rgba(var(--magenta-rgb), .12));
+            color: var(--magenta);
+            font-style: italic;
+            box-shadow: inset 0 0 0 1px rgba(var(--magenta-rgb), .65);
+        }
+        /* 行内编辑：双击单元格后原地出现的输入框，铺满格子、不改变行高 */
+        .data-table td .cell-editor {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            font: inherit;
+            font-style: normal;
+            color: var(--text);
+            outline: 1px solid var(--cyan);
+            outline-offset: 4px;
+        }
+        .data-table td .cell-editor::placeholder {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+        /* 库里的真值 NULL：灰色斜体，与空字符串（空白）区分开 */
+        .data-table tbody tr td.cell-null {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+        .data-table tbody tr td.cell-null.cell-selected {
+            color: var(--on-accent);
+        }
+        /* 「保存修改」是结果区的主操作：文字常显，不跟随 hover 展开 */
+        .result-tools .icon-btn.save-edit-btn {
+            border-color: var(--line-strong);
+            color: var(--cyan);
+            background: rgba(var(--cyan-rgb), .08);
+        }
+        .result-tools .icon-btn.save-edit-btn .btn-label {
+            max-width: none;
+            opacity: 1;
+            margin-left: 6px;
+        }
+        .result-tools .icon-btn.save-edit-btn:hover {
+            background: rgba(var(--cyan-rgb), .18);
+        }
+        /* 结果区底部的未保存修改提示 */
+        .footer-pending {
+            padding: 2px 9px;
+            border-radius: 5px;
+            border: 1px solid rgba(var(--magenta-rgb), .55);
+            background: rgba(var(--magenta-rgb), .12);
+            color: var(--magenta);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+
+        /* ===== 结果表通用确认弹窗（保存修改 / 删除记录 / 复制为表格数据） ===== */
+        .result-confirm-body {
+            padding: 4px 0 8px;
+        }
+        .rc-desc {
+            margin-bottom: 10px;
+            color: var(--text);
+            font-family: var(--font-cjk);
+            font-size: 13px;
+            line-height: 1.7;
+            letter-spacing: .5px;
+        }
+        .rc-estimate {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(var(--magenta-rgb), .5);
+            background: rgba(var(--magenta-rgb), .1);
+            color: var(--magenta);
+            font-family: var(--font-cjk);
+            font-size: 12.5px;
+            letter-spacing: .5px;
+        }
+        .rc-estimate-dot {
+            flex: 0 0 auto;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--magenta);
+            box-shadow: 0 0 8px var(--magenta);
+        }
+        .rc-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            color: var(--text);
+            font-family: var(--font-cjk);
+            font-size: 13px;
+            letter-spacing: .5px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .rc-check input {
+            width: 15px;
+            height: 15px;
+            accent-color: var(--cyan);
+            cursor: pointer;
+        }
+        /* 单元格大编辑弹窗（右键「编辑内容…」）：表头行展示列名 + 原值 */
+        .cell-edit-head {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .cell-edit-col {
+            flex: 0 0 auto;
+            color: var(--cyan);
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+        .cell-edit-original {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        /* ===== 生成 Insert / Update 语句面板 ===== */
+        .rsq-loading {
+            padding: 26px 4px;
+            color: var(--text-dim);
+            font-family: var(--font-cjk);
+            font-size: 13px;
+            line-height: 1.7;
+            letter-spacing: 1px;
+        }
+        .rsq-panel {
+            display: flex;
+            gap: 14px;
+            height: 520px;
+            max-height: 60vh;
+        }
+        .rsq-col {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .rsq-col-left {
+            flex: 1 1 52%;
+        }
+        .rsq-col-right {
+            flex: 1 1 48%;
+        }
+        .rsq-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 0;
+            min-height: 34px;
+        }
+        .rsq-label {
+            flex: 1 1 auto;
+            min-width: 0;
+            color: var(--text-dim);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rsq-mini {
+            flex: 0 0 auto;
+            padding: 3px 9px;
+            border-radius: 5px;
+            border: 1px solid var(--line);
+            background: rgba(var(--cyan-rgb), .05);
+            color: var(--cyan);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all .18s ease;
+        }
+        .rsq-mini:hover {
+            border-color: var(--line-strong);
+            background: rgba(var(--cyan-rgb), .16);
+        }
+        .rsq-mini.active {
+            border-color: var(--magenta);
+            color: var(--magenta);
+            background: rgba(var(--magenta-rgb), .16);
+            box-shadow: 0 0 10px -2px rgba(var(--magenta-rgb), .7);
+        }
+        .rsq-mini.rsq-del:hover {
+            border-color: var(--magenta);
+            color: var(--magenta);
+            background: rgba(var(--magenta-rgb), .16);
+        }
+        .rsq-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: rgba(var(--void-rgb), .35);
+        }
+        .rsq-list-rows {
+            flex: 0 1 118px;
+        }
+        .rsq-list-extra {
+            flex: 0 1 94px;
+            margin-bottom: 6px;
+        }
+        .rsq-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 9px;
+            border-bottom: 1px solid rgba(var(--cyan-rgb), .1);
+        }
+        .rsq-row:last-child {
+            border-bottom: none;
+        }
+        .rsq-check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+            cursor: pointer;
+            user-select: none;
+        }
+        .rsq-check input {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--cyan);
+            cursor: pointer;
+        }
+        .rsq-inline {
+            color: var(--text-dim);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        .rsq-name {
+            flex: 0 0 116px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+        .rsq-name.rsq-generated {
+            color: var(--text-dim);
+            text-decoration: line-through;
+        }
+        .rsq-input {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 3px 8px;
+            border-radius: 5px;
+            border: 1px solid var(--line);
+            background: rgba(var(--void-rgb), .7);
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            outline: none;
+            transition: border-color .18s ease;
+        }
+        .rsq-input:focus {
+            border-color: var(--cyan);
+        }
+        .rsq-input:disabled {
+            opacity: .5;
+        }
+        .rsq-input-name {
+            flex: 0 0 116px;
+        }
+        .rsq-row-item {
+            padding: 5px 9px;
+            border-bottom: 1px solid rgba(var(--cyan-rgb), .1);
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+        .rsq-extra-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0 6px;
+        }
+        .rsq-empty {
+            padding: 8px 10px;
+            color: var(--text-dim);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        .rsq-warn {
+            margin-bottom: 8px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(var(--magenta-rgb), .45);
+            background: rgba(var(--magenta-rgb), .1);
+            color: var(--magenta);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            letter-spacing: .5px;
+        }
+        .rsq-preview {
+            flex: 1 1 auto;
+            min-height: 0;
+            margin: 0;
+            padding: 12px;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--editor-bg);
+            color: var(--editor-fg);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre;
+        }
+        .rsq-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-top: 12px;
         }

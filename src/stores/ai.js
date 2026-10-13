@@ -40,6 +40,56 @@ export const useAiStore = defineStore('ai', () => {
   const hasSession = ref(false);
   const turn = ref(0);
 
+  // ===== 查询 Tab 隔离 =====
+  // 每个查询 Tab 各自的 AI 栏状态（prompt / 状态 / 步骤），切 Tab 时换入换出
+  const tabStates = {};
+  // 是否有生成请求在途（全局同一时刻只允许一个）；genTabId 为它所属的 Tab
+  let inflight = false;
+  let genTabId = null;
+  let genRound = 0;
+  let bgSteps = [];
+
+  const BLANK_TAB = () => ({ prompt: '', status: '', error: '', steps: [] });
+
+  // 把当前 live 的 AI 栏状态存回它所属的 Tab（切 Tab / 换连接前调用）
+  function saveTabState(tabId) {
+    if (!tabId) return;
+    tabStates[tabId] = {
+      prompt: prompt.value,
+      status: status.value,
+      error: error.value,
+      steps: steps.value
+    };
+  }
+
+  // 换入某个 Tab 的 AI 栏状态；tabId 为空表示当前没有查询 Tab
+  function loadTabState(tabId) {
+    if (!tabId) {
+      prompt.value = ''; status.value = ''; error.value = ''; steps.value = [];
+      generating.value = false; phase.value = ''; phaseRound.value = 0; lastUsage.value = null;
+      hasSession.value = false; turn.value = 0;
+      return;
+    }
+    const st = tabStates[tabId] || (tabStates[tabId] = BLANK_TAB());
+    prompt.value = st.prompt;
+    status.value = st.status;
+    error.value = st.error;
+    steps.value = st.steps;
+    // 该 Tab 自己的生成任务还在跑：恢复生成中的界面
+    const mine = inflight && genTabId === tabId;
+    generating.value = mine;
+    phase.value = mine ? 'thinking' : '';
+    phaseRound.value = mine ? genRound : 0;
+    lastUsage.value = null;
+    // 后端会话按「连接 + 库」共享，不跨 Tab 还原上下文按钮状态，避免串上下文
+    hasSession.value = false;
+    turn.value = 0;
+  }
+
+  function dropTabState(tabId) {
+    if (tabId) delete tabStates[tabId];
+  }
+
   // 换连接或换库就不该再沿用上一轮的上下文
   watch(
     () => [conn.currentConnId, conn.currentDatabase],
@@ -58,14 +108,15 @@ export const useAiStore = defineStore('ai', () => {
     binding = listen('ai:progress', ev => {
       const p = ev.payload || {};
       if (p.phase === 'step') {
-        steps.value.push({
-          tool: p.tool || '',
-          summary: p.summary || '',
-          ms: Number(p.elapsed_ms) || 0
-        });
+        const step = { tool: p.tool || '', summary: p.summary || '', ms: Number(p.elapsed_ms) || 0 };
+        // 生成所属的 Tab 已切走：先攒进缓冲，结束时整体写回它，不打扰当前 Tab
+        if (inflight && genTabId !== ws.activeTabId) bgSteps.push(step);
+        else steps.value.push(step);
       } else if (p.phase === 'thinking') {
+        genRound = p.round || 0;
+        if (inflight && genTabId !== ws.activeTabId) return;
         phase.value = 'thinking';
-        phaseRound.value = p.round || 0;
+        phaseRound.value = genRound;
       }
     });
   }
@@ -100,6 +151,11 @@ export const useAiStore = defineStore('ai', () => {
       ui.showToast('请先选择要操作的数据库', 'error');
       return false;
     }
+    // 生成是全局单任务（后端会话不并发）：切到别的 Tab 后按钮虽可用，也不许再起一个
+    if (inflight) {
+      ui.showToast('已有生成任务正在进行中，请稍候', 'error');
+      return false;
+    }
 
     generating.value = true;
     error.value = '';
@@ -110,26 +166,57 @@ export const useAiStore = defineStore('ai', () => {
     status.value = keepSession && hasSession.value
       ? '正在基于上一轮结果微调…'
       : '正在生成 SQL…（模型会先查询表结构）';
+    // 记下发起时的 Tab：结果回来时用户可能已经切走
+    const tabId = ws.activeTabId;
+    inflight = true;
+    genTabId = tabId;
+    genRound = 0;
+    bgSteps = [];
+    const backgrounded = () => genTabId !== ws.activeTabId;
+    const bgState = () => tabStates[genTabId] || (tabStates[genTabId] = BLANK_TAB());
     try {
       const res = await conn.withRetry(id => api.aiGenerateSql(
         id, conn.currentDatabase, text, { ...config.value }, !!keepSession
       ));
-      lastUsage.value = res.usage || null;
-      hasSession.value = !!res.hasSession;
-      turn.value = res.turn || 0;
-      ws.setSql(res.sql);
-      status.value = `已生成（第 ${res.turn || 1} 轮上下文，${res.rounds} 次模型调用）`;
+      const done = `已生成（第 ${res.turn || 1} 轮上下文，${res.rounds} 次模型调用）`;
+      if (backgrounded()) {
+        // 已切走：SQL 与状态写回原 Tab，不打扰当前 Tab
+        ws.setSqlForTab(genTabId, res.sql);
+        const st = bgState();
+        st.status = done;
+        st.error = '';
+        st.steps = bgSteps;
+      } else {
+        lastUsage.value = res.usage || null;
+        hasSession.value = !!res.hasSession;
+        turn.value = res.turn || 0;
+        ws.setSql(res.sql);
+        status.value = done;
+      }
       ui.showToast('SQL 已生成并写入编辑器', 'success');
       return true;
     } catch (err) {
       // 失败时保留上一轮可用上下文，用户可直接重试
-      error.value = String((err && err.message) || err);
-      status.value = '';
-      ui.showToast('生成失败：' + error.value, 'error');
+      const msg = String((err && err.message) || err);
+      if (backgrounded()) {
+        const st = bgState();
+        st.error = msg;
+        st.status = '';
+        st.steps = bgSteps;
+      } else {
+        error.value = msg;
+        status.value = '';
+      }
+      ui.showToast('生成失败：' + msg, 'error');
       return false;
     } finally {
+      inflight = false;
+      genTabId = null;
+      genRound = 0;
+      bgSteps = [];
       generating.value = false;
       phase.value = '';
+      phaseRound.value = 0;
     }
   }
 
@@ -152,6 +239,7 @@ export const useAiStore = defineStore('ai', () => {
   return {
     config, generating, status, error, prompt, steps, phase, phaseRound, lastUsage,
     hasSession, turn,
-    init, isConfigured, saveConfig, testConfig, generate, clearSteps, reset
+    init, isConfigured, saveConfig, testConfig, generate, clearSteps, reset,
+    saveTabState, loadTabState, dropTabState
   };
 });

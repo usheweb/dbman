@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { useSqlStore } from '@/stores/sql';
 import { useAiStore } from '@/stores/ai';
 import { useThemeStore } from '@/stores/theme';
+import { todayKey } from '@/utils/format';
 
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ConnectionSidebar from '@/components/layout/ConnectionSidebar.vue';
@@ -26,6 +27,9 @@ import TableDdlModal from '@/components/modals/TableDdlModal.vue';
 import ExportSqlModal from '@/components/modals/ExportSqlModal.vue';
 import TableDesignerModal from '@/components/modals/TableDesignerModal.vue';
 import CsvImportModal from '@/components/modals/CsvImportModal.vue';
+import ResultConfirmModal from '@/components/modals/ResultConfirmModal.vue';
+import CellEditModal from '@/components/modals/CellEditModal.vue';
+import ResultSqlPanel from '@/components/modals/ResultSqlPanel.vue';
 import PromoModal from '@/components/modals/PromoModal.vue';
 import ToastHost from '@/components/common/ToastHost.vue';
 import ContextMenu from '@/components/common/ContextMenu.vue';
@@ -79,9 +83,9 @@ function onCtxSelect(item) {
 
 // 启动引导：先把本地文件里的数据读进内存，后面的渲染/绑定才有正确的初始状态
 onMounted(async () => {
-  // 每次启动都弹一次「唐三浪学习时钟」推广弹窗（倒计时结束后可关闭）
-  ui.openModal('promoModal');
   await store.load();
+  // 「唐三浪学习时钟」推广弹窗：当天勾选过「今日不再提示」就跳过，次日恢复弹出
+  if (store.get('dbman_promo_skip_date') !== todayKey()) ui.openModal('promoModal');
   ui.init();
   conn.init();
   ws.init();
@@ -91,6 +95,8 @@ onMounted(async () => {
   if (!conn.isConnected) ui.setPanel('sidebar', false);
   // 工作区执行完语句后要写 SQL 日志，这里做一次注入，避免 store 之间循环依赖
   ws.bindSqlStore(sql);
+  // 查询 Tab 换入换出时要同步换 AI 栏状态，同样由这里注入（workspace → ai 会循环依赖）
+  ws.bindAiStore(ai);
   document.addEventListener('contextmenu', onDocContextMenu);
 });
 
@@ -123,6 +129,9 @@ onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMe
   <ExportSqlModal />
   <TableDesignerModal />
   <CsvImportModal />
+  <ResultConfirmModal />
+  <CellEditModal />
+  <ResultSqlPanel />
   <PromoModal :visible="ui.modals.promoModal" @close="ui.closeModal('promoModal')" />
   <ContextMenu
     v-if="ctxVisible"

@@ -4,6 +4,12 @@ export function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
+// 本地日期键 YYYY-MM-DD：用于「今日不再提示」这类按天失效的标记
+export function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 export function formatDateTime(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} `
     + `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;

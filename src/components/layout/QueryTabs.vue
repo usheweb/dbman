@@ -1,0 +1,41 @@
+<script setup>
+// 查询 Tab 条：每个连接一组查询 Tab，各自独立的 SQL 编辑器内容、结果集与 AI 栏
+import { computed } from 'vue';
+import { useWorkspaceStore } from '@/stores/workspace';
+import { useConnectionStore } from '@/stores/connection';
+
+const ws = useWorkspaceStore();
+const conn = useConnectionStore();
+
+// 提示文案带上连接与库，避免多个连接里同名「查询 1」分不清
+const ctx = computed(() => {
+  const c = conn.currentConnData;
+  return [c && c.name, conn.currentDatabase].filter(Boolean).join(' · ');
+});
+</script>
+
+<template>
+  <div class="query-tabs-bar">
+    <button
+      v-for="t in ws.activeTabs"
+      :key="t.id"
+      class="conn-tab query-tab"
+      :class="{ active: t.id === ws.activeTabId }"
+      :title="ctx ? t.name + '（' + ctx + '）' : t.name"
+      @click="ws.activateQueryTab(t.id)"
+    >
+      <span class="conn-tab-name">{{ t.name }}</span>
+      <span
+        v-if="ws.activeTabs.length > 1"
+        class="conn-tab-close"
+        title="关闭查询"
+        @click.stop="ws.closeQueryTab(t.id)"
+      >×</span>
+    </button>
+    <button class="query-tab-add" title="新建查询" @click="ws.newQueryTab()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M8 3.5v9M3.5 8h9" />
+      </svg>
+    </button>
+  </div>
+</template>

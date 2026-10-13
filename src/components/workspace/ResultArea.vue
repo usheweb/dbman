@@ -57,6 +57,30 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <span>{{ ws.lastResult ? ws.lastResult.data.length + ' 行' : '' }}</span>
       <div class="result-tools">
         <button
+          v-if="ws.hasPendingEdits"
+          class="icon-btn"
+          :title="'放弃当前 ' + ws.pendingEditCount + ' 个未保存的单元格修改'"
+          @click="ws.discardPendingEdits()"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+          <span class="btn-label">放弃修改</span>
+        </button>
+        <button
+          v-if="ws.hasPendingEdits"
+          class="icon-btn save-edit-btn"
+          :title="'把结果表中暂存的 ' + ws.pendingEditCount + ' 个单元格修改生成 UPDATE 并执行'"
+          @click="ws.savePendingEdits()"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19.5 21h-15A1.5 1.5 0 0 1 3 19.5v-15A1.5 1.5 0 0 1 4.5 3H16l5 5v11.5A1.5 1.5 0 0 1 19.5 21z" />
+            <path d="M17 21v-7H7v7" />
+            <path d="M7 3v5h7" />
+          </svg>
+          <span class="btn-label">保存修改 ({{ ws.pendingEditCount }})</span>
+        </button>
+        <button
           class="icon-btn"
           :class="{ active: ws.globalDisplay.timestamp }"
           title="把时间戳列显示为可读时间"

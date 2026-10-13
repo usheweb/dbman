@@ -56,6 +56,14 @@ export function sqlLiteralFor(col, value, rows) {
   return sqlQuote(v);
 }
 
+// 用户手输的值 -> SQL 字面量：只有「整列是数字列」且「输入本身就是规范数字写法」才裸写，
+// 否则一律加引号。避免 varchar 列里输入的 "000123" 被写成 123（丢前导零）、"1e5" 被规范化。
+export function sqlLiteralForTyped(col, value, rows) {
+  const v = String(value == null ? '' : value).trim();
+  if (isNumericColumn(col, rows) && /^-?\d+(\.\d+)?$/.test(v) && String(Number(v)) === v) return v;
+  return sqlQuote(v);
+}
+
 // 筛选运算符定义：n 为需要的值个数（1 / 2 / 'list' / 0）
 export const FILTER_OPS = [
   { k: 'eq', label: '等于 (=)', n: 1 },

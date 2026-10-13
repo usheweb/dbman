@@ -14,10 +14,12 @@ const STORE_FILES: &[(&str, &str)] = &[
     ("dbman_global_display", "global_display.json"),
     ("dbman_panel_state", "panel_state.json"),
     ("dbman_export_opts", "export_opts.json"),
+    ("dbman_table_sort", "table_sort.json"),
     ("dbman_sql_log", "sql_log.jsonl"),
     ("dbman_sql_favorites", "sql_favorites.jsonl"),
     ("dbman_ai_config", "ai_config.json"),
     ("dbman_result_history", "result_history.json"),
+    ("dbman_promo_skip_date", "promo_skip_date.json"),
 ];
 
 fn store_file(dir: &Path, key: &str) -> Option<PathBuf> {

@@ -5,6 +5,8 @@ import CodeMirror from 'codemirror';
 import 'codemirror/mode/sql/sql.js';
 import 'codemirror/addon/hint/show-hint.js';
 import 'codemirror/addon/hint/sql-hint.js';
+// 光标所在行加 class（wrap / background / gutter），「执行这一行」按钮据此显隐
+import 'codemirror/addon/selection/active-line.js';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
@@ -48,6 +50,35 @@ function fillRunGutters() {
       }
     }
   });
+  syncGutterWidth();
+}
+
+// 「执行这一行」按钮要落在整条行号栏（执行列 + 行号列）的水平正中，
+// 而栏宽随行号位数变化，纯 CSS 量不到，这里把实测总宽写进 CSS 变量交给 theme.css 定位
+function syncGutterWidth() {
+  if (!cm) return;
+  const gutters = cm.getWrapperElement().querySelector('.CodeMirror-gutters');
+  if (!gutters) return;
+  cm.getWrapperElement().style.setProperty('--cm-gutter-w', gutters.offsetWidth + 'px');
+}
+
+// 光标停在空行（没有可执行的 SQL）时不显示「执行这一行」按钮
+function syncCursorLineState() {
+  if (!cm) return;
+  const empty = !(cm.getLine(cm.getCursor().line) || '').trim();
+  cm.getWrapperElement().classList.toggle('cursor-line-empty', empty);
+}
+
+// 点击是否落在「执行这一行」按钮的圆环范围内。
+// 按钮被 CSS 居中铺在整条行号栏上，横向会越过 run-gutter 列，
+// 此时 CodeMirror 会按 x 坐标把点击归给行号列，光看 gutter 名会漏判
+function clickOnRunBtn(instance, e) {
+  if (e && e.target instanceof Element && e.target.closest('.run-gutter-btn')) return true;
+  const gutters = instance.getWrapperElement().querySelector('.CodeMirror-gutters');
+  if (!gutters || !e) return false;
+  const box = gutters.getBoundingClientRect();
+  // 按钮直径 17px，居中在整条行号栏，两侧各留 3px 容差
+  return Math.abs((e.clientX - box.left) - box.width / 2) <= 11.5;
 }
 
 onMounted(() => {
@@ -57,6 +88,8 @@ onMounted(() => {
     theme: theme.editorTheme,
     lineNumbers: true,
     gutters: ['run-gutter', 'CodeMirror-linenumbers'],
+    // 光标所在行标记：nonEmpty 为 false 让「选中单行」时也保持标记，多行选择则不标记
+    styleActiveLine: { nonEmpty: false },
     indentWithTabs: false,
     // 与 formatSql 的缩进保持一致（2 空格），否则回车续行与格式化结果缩进不同
     indentUnit: 2,
@@ -79,8 +112,8 @@ onMounted(() => {
     showSqlHint(instance, conn);
   });
   // 行内「执行这一行」：点击行号左侧的播放图标只跑该行 SQL，不覆盖编辑器内容
-  cm.on('gutterClick', (instance, line, gutter) => {
-    if (gutter !== RUN_GUTTER) return;
+  cm.on('gutterClick', (instance, line, gutter, e) => {
+    if (gutter !== RUN_GUTTER && !clickOnRunBtn(instance, e)) return;
     const text = (instance.getLine(line) || '').trim();
     if (!text) {
       ui.showToast('这一行没有可执行的 SQL', 'error');
@@ -88,11 +121,16 @@ onMounted(() => {
     }
     ws.executeSqlText(text);
   });
-  // 增删行后给新行补上播放图标
-  cm.on('changes', fillRunGutters);
+  // 光标移动 / 行内容变化时同步「光标行是否为空」，决定要不要显示执行按钮
+  cm.on('cursorActivity', syncCursorLineState);
+  // 增删行后给新行补上播放图标（顺带同步行号栏宽度，行号位数变化会改变栏宽）
+  cm.on('changes', () => { fillRunGutters(); syncCursorLineState(); });
+  // 刷新（窗口尺寸/折叠状态变化等）后重新量一次行号栏宽度
+  cm.on('refresh', syncGutterWidth);
   // 编辑器是全局单实例：切连接会重建，这里把当前连接的 SQL 草稿灌回去
   ws.applyDraft();
   fillRunGutters();
+  syncCursorLineState();
   // CodeMirror 5 对 gutter marker 是懒渲染，初次挂载后强制刷新一次，否则播放图标不出 DOM
   cm.refresh();
 });

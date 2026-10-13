@@ -109,6 +109,9 @@ async function commitPage() {
       </select>
     </label>
     <span class="footer-status" v-html="statusHtml"></span>
+    <span v-if="ws.hasPendingEdits" class="footer-pending" title="翻页会丢弃这些未保存的修改">
+      有 {{ ws.pendingEditCount }} 个单元格修改待保存
+    </span>
     <button
       class="export-link"
       title="导出结果为 CSV（可选表头与范围）"
