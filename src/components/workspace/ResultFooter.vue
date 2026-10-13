@@ -25,6 +25,12 @@ const statusHtml = computed(() => {
 
 const pageSizeOptions = [100, 300, 1000, 3000];
 
+// 查看历史结果时禁用翻页：翻页是复用最近一次 SQL 重新查库，历史条目已定型
+const pagingDisabled = computed(() => !!ws.historyView || !ws.pageInfo.paged);
+const pagingTitle = computed(() => ws.historyView
+  ? '正在查看历史结果，翻页请先切回「最新结果」'
+  : (ws.pageInfo.paged ? '输入页码后回车跳转' : 'SQL 自带 LIMIT 或不是查询语句，未启用分页'));
+
 function onChangePageSize(e) {
   ws.changePageSize(e.target.value);
 }
@@ -67,7 +73,7 @@ async function commitPage() {
       <button
         class="page-btn"
         title="上一页"
-        :disabled="!ws.pageInfo.paged || ws.pageNo <= 1"
+        :disabled="pagingDisabled || ws.pageNo <= 1"
         @click="ws.gotoPage(ws.pageNo - 1)"
       >‹</button>
       <input
@@ -77,8 +83,8 @@ async function commitPage() {
         autocapitalize="off"
         autocorrect="off"
         spellcheck="false"
-        :disabled="!ws.pageInfo.paged"
-        :title="ws.pageInfo.paged ? '输入页码后回车跳转' : 'SQL 自带 LIMIT 或不是查询语句，未启用分页'"
+        :disabled="pagingDisabled"
+        :title="pagingTitle"
         :value="pageInput"
         @input="onPageInput"
         @keyup.enter="commitPage"
@@ -87,7 +93,7 @@ async function commitPage() {
       <button
         class="page-btn"
         title="下一页"
-        :disabled="!ws.pageInfo.paged || !ws.pageInfo.hasMore"
+        :disabled="pagingDisabled || !ws.pageInfo.hasMore"
         @click="ws.gotoPage(ws.pageNo + 1)"
       >›</button>
     </div>
@@ -95,8 +101,8 @@ async function commitPage() {
       <select
         class="page-size"
         :value="String(ws.pageSize)"
-        :disabled="!ws.pageInfo.paged"
-        :title="ws.pageInfo.paged ? '每页显示条数' : 'SQL 自带 LIMIT 或不是查询语句，未启用分页'"
+        :disabled="pagingDisabled"
+        :title="pagingTitle"
         @change="onChangePageSize"
       >
         <option v-for="opt in pageSizeOptions" :key="opt" :value="String(opt)">{{ opt }}</option>

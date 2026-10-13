@@ -4,7 +4,7 @@ import ModalShell from '@/components/common/ModalShell.vue';
 import { useUiStore } from '@/stores/ui';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useSqlStore } from '@/stores/sql';
-import { escapeHtml } from '@/utils/escape';
+import { highlightSqlSyntax } from '@/utils/sql';
 import { formatDateTime } from '@/utils/format';
 
 const ui = useUiStore();
@@ -26,21 +26,6 @@ watch(() => ui.modals.sqlLogModal, async (v) => {
     if (searchInput.value) searchInput.value.focus();
   }
 });
-
-function highlightSql(sql, kw) {
-  const k = String(kw).toLowerCase();
-  if (!k) return escapeHtml(sql);
-  const lower = String(sql).toLowerCase();
-  let out = '';
-  let pos = 0;
-  let i = lower.indexOf(k, pos);
-  while (i !== -1) {
-    out += escapeHtml(sql.slice(pos, i)) + '<span class="log-hit">' + escapeHtml(sql.slice(i, i + k.length)) + '</span>';
-    pos = i + k.length;
-    i = lower.indexOf(k, pos);
-  }
-  return out + escapeHtml(sql.slice(pos));
-}
 
 function useLogSql(idx) {
   const e = sqlStore.sqlLog[idx];
@@ -98,7 +83,7 @@ function clearLog() {
           <button class="log-fav" :class="{ active: sqlStore.isFaved(x.e.sql) }" :title="sqlStore.isFaved(x.e.sql) ? '取消收藏' : '收藏这条 SQL'" @click.stop="favFromLog(x.idx)">&starf;</button>
           <button class="log-del" title="删除这条日志" @click.stop="deleteLog(x.idx)">&times;</button>
         </div>
-        <div class="log-sql" v-html="keyword ? highlightSql(x.e.sql, keyword) : escapeHtml(x.e.sql)"></div>
+        <div class="log-sql" v-html="highlightSqlSyntax(x.e.sql, keyword)"></div>
       </div>
       <div class="log-empty" v-if="!items.length">{{ sqlStore.sqlLog.length ? '没有匹配的 SQL' : '暂无 SQL 日志' }}</div>
     </div>

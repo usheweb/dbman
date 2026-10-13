@@ -6,7 +6,7 @@ import { useStoreStore } from './store';
 import { useUiStore } from './ui';
 import { useConnectionStore } from './connection';
 import {
-  rawText, formatValue, formatDateTime, isTimestampValue,
+  rawText, formatValue, formatDateTime, isTimestampValue, generateId,
   parseEnumFromComment, stripEnumFromComment, csvCell, exportFilename
 } from '@/utils/format';
 import {
@@ -42,6 +42,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const findState = ref({ keyword: '', only: true, index: -1 });
   const matchCells = ref([]); // [{ r, c }]，当前页命中的单元格
 
+  // 查询结果历史：按连接分开保存并落盘，结果区下拉可切换回看
+  const histories = ref({});     // { [connId]: [entry] }，最新的一条排在最前
+  const historyView = ref(null); // 当前正在查看的历史条目 id；null 表示看最新一次执行的结果
+  let liveSnapshot = null;       // 切到历史结果前暂存的最新结果，选「最新结果」时还原
+  let historyPersistTimer = null;
+
+  const historyList = computed(() => histories.value[conn.currentConnId] || []);
+
   // 危险操作二次确认
   const execConfirm = ref({ visible: false, kinds: [], sql: '' });
   let execConfirmResolver = null;
@@ -52,6 +60,96 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function init() {
     pageSize.value = parseInt(store.get('dbman_page_size'), 10) || 300;
     Object.assign(globalDisplay.value, store.get('dbman_global_display') || {});
+    const hist = store.get('dbman_result_history');
+    histories.value = (hist && typeof hist === 'object' && !Array.isArray(hist)) ? hist : {};
+  }
+
+  // ===== 查询结果历史 =====
+  function historyLimit() {
+    const n = parseInt(ui.viewOpts.resultHistoryMax, 10);
+    return Number.isFinite(n) && n > 0 ? n : 100;
+  }
+
+  // 结果集可能很大，写盘开销高，这里做防抖，避免连续查询反复序列化
+  function persistHistory() {
+    clearTimeout(historyPersistTimer);
+    historyPersistTimer = setTimeout(() => {
+      store.set('dbman_result_history', JSON.parse(JSON.stringify(histories.value)));
+    }, 1500);
+  }
+
+  // 执行成功后缓存一份结果（写语句 lastResult 为 null，自然跳过）
+  function pushHistory(sql) {
+    const connId = conn.currentConnId;
+    const r = lastResult.value;
+    if (!connId || !r) return;
+    const list = histories.value[connId] || (histories.value[connId] = []);
+    list.unshift({
+      id: generateId(),
+      sql,
+      db: conn.currentDatabase || '',
+      time: Date.now(),
+      elapsed: pageInfo.value.elapsed,
+      pageNo: pageNo.value,
+      pageInfo: { ...pageInfo.value },
+      data: r.data,
+      fields: r.fields,
+      colInfo: r.colInfo
+    });
+    const limit = historyLimit();
+    if (list.length > limit) list.splice(limit);
+    historyView.value = null;
+    liveSnapshot = null;
+    persistHistory();
+  }
+
+  // 上限调小后，已缓存的历史立即裁剪到新上限
+  function trimHistories() {
+    const limit = historyLimit();
+    let changed = false;
+    Object.keys(histories.value).forEach(k => {
+      const list = histories.value[k];
+      if (Array.isArray(list) && list.length > limit) { list.splice(limit); changed = true; }
+    });
+    const cur = histories.value[conn.currentConnId] || [];
+    if (historyView.value && !cur.some(e => e.id === historyView.value)) historyView.value = null;
+    if (changed) persistHistory();
+  }
+
+  // 下拉切换历史结果；entryId 为空表示回到最新一次执行的结果，loadSql 表示同时载入 SQL
+  function selectHistory(entryId, loadSql) {
+    if (!entryId) {
+      if (liveSnapshot) {
+        lastResult.value = liveSnapshot.lastResult;
+        lastSql.value = liveSnapshot.lastSql;
+        pageNo.value = liveSnapshot.pageNo;
+        pageInfo.value = liveSnapshot.pageInfo;
+        liveSnapshot = null;
+      }
+      historyView.value = null;
+      resetFindState();
+      recomputeMatches();
+      return;
+    }
+    const entry = (histories.value[conn.currentConnId] || []).find(e => e.id === entryId);
+    if (!entry) return;
+    // 首次从「最新结果」切到历史时，把最新结果暂存起来
+    if (historyView.value === null && lastResult.value) {
+      liveSnapshot = {
+        lastResult: lastResult.value,
+        lastSql: lastSql.value,
+        pageNo: pageNo.value,
+        pageInfo: pageInfo.value
+      };
+    }
+    lastResult.value = { data: entry.data, fields: entry.fields, colInfo: entry.colInfo };
+    lastSql.value = entry.sql;
+    pageNo.value = entry.pageNo;
+    pageInfo.value = { ...entry.pageInfo };
+    historyView.value = entry.id;
+    resetFindState();
+    recomputeMatches();
+    if (loadSql) setSql(entry.sql);
   }
 
   // ===== 编辑器 =====
@@ -79,6 +177,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       matchCells: matchCells.value,
       pageNo: pageNo.value,
       pageInfo: pageInfo.value,
+      historyView: historyView.value,
       sql: getSql()
     };
   }
@@ -91,6 +190,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     pageNo.value = 1;
     pageInfo.value = IDLE_PAGE();
     draftSql.value = '';
+    historyView.value = null;
+    liveSnapshot = null;
     if (editor.value) editor.value.setValue('');
   }
 
@@ -103,6 +204,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     pageNo.value = s.pageNo || 1;
     pageInfo.value = s.pageInfo || IDLE_PAGE();
     draftSql.value = s.sql || '';
+    historyView.value = s.historyView || null;
+    liveSnapshot = null;
     if (editor.value) editor.value.setValue(s.sql || '');
   }
 
@@ -292,9 +395,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (resolve) resolve(ok);
   }
 
-  async function executeQuery(confirmed) {
-    const sql = getSql();
-    if (!sql.trim()) return;
+  // 执行一段指定 SQL：整段执行与行内「执行这一行」共用同一套流程与日志
+  async function runSql(sql, confirmed) {
+    if (!sql || !sql.trim()) return;
     // 会改动数据 / 结构 / 权限或实例状态的语句，执行前必须二次确认
     if (!confirmed) {
       const kinds = detectDangerousStatements(sql);
@@ -309,11 +412,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const elapsed = Date.now() - started;
       adoptRows(data, 1, elapsed);
       recomputeMatches();
+      pushHistory(sql);
       addSqlLog(sql, { success: true, elapsed, rows: pageInfo.value.rows });
     } catch (err) {
       renderError(err.message);
       addSqlLog(sql, { success: false, elapsed: Date.now() - started, error: err.message });
     }
+  }
+
+  function executeQuery(confirmed) {
+    return runSql(getSql(), confirmed);
+  }
+
+  // 编辑器行内「执行这一行」：直接跑传入的文本，不覆盖编辑器里的完整脚本
+  function executeSqlText(sql) {
+    return runSql(sql);
   }
 
   // 翻页 / 改每页条数：复用最近一次执行的 SQL 重新查库，保留查找状态
@@ -564,13 +677,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     editor, draftSql, lastSql, lastResult, columnModes, globalDisplay,
     pageSize, pageNo, pageInfo, findState, matchCells, matchCount,
     execConfirm, filterDialog,
+    histories, historyList, historyView, selectHistory, trimHistories,
     resultColumns, columnModesForRender, visibleRowIndexes,
     MODE_LABEL,
     init, setEditor, getSql, setSql, setSqlAndRun, applyDraft,
     currentColComments, effectiveColumnMode, applyDisplayMode, analyzeColumns,
     toggleGlobalMode, toggleColumnMode,
     rowHit, cellHit, recomputeMatches,
-    executeQuery, reloadPage, gotoPage, changePageSize,
+    executeQuery, executeSqlText, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
     openFilterDialog, closeFilterDialog, applyFilter,

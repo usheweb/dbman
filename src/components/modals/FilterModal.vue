@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import ModalShell from '@/components/common/ModalShell.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
-import { FILTER_OPS, filterOpDef, buildWhereFromRows } from '@/utils/sql';
+import { FILTER_OPS, filterOpDef, buildWhereFromRows, highlightSqlSyntax } from '@/utils/sql';
 
 const ws = useWorkspaceStore();
 const rows = ref([]);
@@ -82,7 +82,7 @@ function apply(exec) {
     </div>
     <div class="form-group">
       <label>生成的 SQL 条件预览</label>
-      <div class="filter-preview">{{ preview }}</div>
+      <div class="filter-preview" v-html="highlightSqlSyntax(preview)"></div>
     </div>
     <div class="filter-actions">
       <button class="btn btn-secondary" @click="resetRows">清空条件</button>

@@ -3,6 +3,7 @@
 // 面板挂到 body 上（侧栏有 overflow 裁切，不能在里面做绝对定位的弹层）
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { TABLE_SORT_FIELDS, DEFAULT_TABLE_SORT, normalizeSortKeys } from '@/utils/tableSort';
+import IconSelect from '@/components/common/IconSelect.vue';
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -38,6 +39,8 @@ function onDocMousedown(ev) {
   const t = ev.target;
   if (panelEl.value && panelEl.value.contains(t)) return;
   if (props.anchor && props.anchor.contains(t)) return;
+  // 维度下拉的菜单 Teleport 到 body，不在面板内，需放行
+  if (t instanceof Element && t.closest('.icon-select-menu')) return;
   emit('close');
 }
 
@@ -116,13 +119,12 @@ function reset() {
         <div v-if="!keys.length" class="sort-empty">未设置排序，按数据库返回顺序显示</div>
         <div v-for="(k, i) in keys" :key="k.field" class="sort-row">
           <span class="sort-priority">{{ i + 1 }}</span>
-          <select
+          <IconSelect
             class="sort-field"
-            :value="k.field"
-            @change="setField(i, $event.target.value)"
-          >
-            <option v-for="f in optionsFor(i)" :key="f.field" :value="f.field">{{ f.label }}</option>
-          </select>
+            :model-value="k.field"
+            :options="optionsFor(i).map(f => ({ value: f.field, label: f.label }))"
+            @update:model-value="setField(i, $event)"
+          />
           <button
             class="sort-btn sort-text"
             :title="k.dir === 'asc' ? '当前升序，点击切换为降序' : '当前降序，点击切换为升序'"
@@ -232,20 +234,22 @@ function reset() {
   color: var(--text-dim);
 }
 
+/* 排序维度选择：复用数据库选择器（IconSelect），压成面板行高 */
 .sort-field {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 4px 6px;
-  background: rgba(var(--void-rgb), .7);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
 }
 
-.sort-field:focus {
-  border-color: var(--cyan);
+.sort-field :deep(.icon-select-trigger) {
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.sort-field :deep(.icon-select-caret) {
+  color: var(--text-dim);
+  opacity: 1;
 }
 
 .sort-foot {

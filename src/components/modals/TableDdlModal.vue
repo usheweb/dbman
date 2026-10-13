@@ -1,10 +1,17 @@
 <script setup>
+import { computed } from 'vue';
 import ModalShell from '@/components/common/ModalShell.vue';
 import { useTableStore } from '@/stores/table';
 import { useUiStore } from '@/stores/ui';
+import { highlightSqlSyntax } from '@/utils/sql';
 
 const table = useTableStore();
 const ui = useUiStore();
+
+// 建表语句按关键字着色，配色对齐 SQL 编辑器
+const ddlHtml = computed(() => (
+  table.ddlModal.loading ? '加载中…' : highlightSqlSyntax(table.ddlModal.ddl)
+));
 
 async function copy() {
   try {
@@ -22,7 +29,7 @@ async function copy() {
     <div class="log-tools">
       <button class="btn btn-secondary" @click="copy">复制</button>
     </div>
-    <pre class="ddl-pre">{{ table.ddlModal.loading ? '加载中…' : table.ddlModal.ddl }}</pre>
+    <pre class="ddl-pre" v-html="ddlHtml"></pre>
   </ModalShell>
 </template>
 

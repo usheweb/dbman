@@ -8,12 +8,28 @@ mod state;
 mod store;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tauri::{Manager, State};
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 
 use models::ConnectRequest;
 use state::{AppState, DbConn};
+
+/// 建连超时。安全组/防火墙丢包时 TCP 会一直重传（macOS 默认约 75 秒才报错），
+/// 这里主动兜底，避免界面长时间没有任何反应。
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// 建连超时的统一提示：明确告诉用户可能的原因，而不是抛一句系统级超时。
+fn connect_timeout_error(host: &str, port: u16) -> String {
+    format!(
+        "连接超时（{} 秒）：{}:{} 无响应。请检查地址端口是否正确，以及服务器防火墙或云安全组是否放行本机 IP",
+        CONNECT_TIMEOUT.as_secs(),
+        host,
+        port
+    )
+}
 
 fn base36(mut n: u64) -> String {
     if n == 0 {
@@ -49,18 +65,25 @@ async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<
     let conn_id = generate_id();
     let ssh_cfg = payload.ssh.clone().unwrap_or_default();
 
-    let mut host = payload.config.host.clone();
-    let mut port = payload
+    // 用户填写的真实目标：SSH 模式下 host/port 会被换成本地转发地址，报错时仍展示真实目标
+    let target_host = payload.config.host.clone();
+    let target_port = payload
         .config
         .port
         .unwrap_or_else(|| mysql::default_port(&db_type));
 
+    let mut host = target_host.clone();
+    let mut port = target_port;
+
     if ssh_cfg.enabled {
-        let remote_port = payload
-            .config
-            .port
-            .unwrap_or_else(|| mysql::default_port(&db_type));
-        let tunnel = ssh::connect_tunnel(&ssh_cfg, &payload.config.host, remote_port).await?;
+        let ssh_host = ssh_cfg.host.clone().unwrap_or_default();
+        let ssh_port = ssh_cfg.port.unwrap_or(22);
+        let tunnel = timeout(
+            CONNECT_TIMEOUT,
+            ssh::connect_tunnel(&ssh_cfg, &target_host, target_port),
+        )
+        .await
+        .map_err(|_| connect_timeout_error(&ssh_host, ssh_port))??;
         let local_port = tunnel.local_port;
         state.tunnels.lock().await.insert(conn_id.clone(), tunnel);
         host = "127.0.0.1".to_string();
@@ -68,22 +91,24 @@ async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<
     }
 
     let connect_result = if db_type == "mysql" {
-        match mysql::connect(&payload.config, &host, port).await {
-            Ok(conn) => {
+        match timeout(CONNECT_TIMEOUT, mysql::connect(&payload.config, &host, port)).await {
+            Ok(Ok(conn)) => {
                 state
                     .insert(conn_id.clone(), DbConn::Mysql(Arc::new(Mutex::new(conn))))
                     .await;
                 Ok(())
             }
-            Err(e) => Err(e),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(connect_timeout_error(&target_host, target_port)),
         }
     } else {
-        match redis_cmd::connect(&payload.config, &host, port).await {
-            Ok(cm) => {
+        match timeout(CONNECT_TIMEOUT, redis_cmd::connect(&payload.config, &host, port)).await {
+            Ok(Ok(cm)) => {
                 state.insert(conn_id.clone(), DbConn::Redis(cm)).await;
                 Ok(())
             }
-            Err(e) => Err(e),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(connect_timeout_error(&target_host, target_port)),
         }
     };
 

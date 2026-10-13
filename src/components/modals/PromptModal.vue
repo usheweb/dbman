@@ -24,7 +24,7 @@ function ok() {
 </script>
 
 <template>
-  <ModalShell :visible="table.prompt.visible" width="460px" @close="table.resolvePrompt(null)">
+  <ModalShell class="modal-top" :visible="table.prompt.visible" width="460px" @close="table.resolvePrompt(null)">
     <template #title>{{ table.prompt.title }}</template>
     <div class="export-body">
       <div class="export-row">

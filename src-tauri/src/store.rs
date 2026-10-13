@@ -17,6 +17,7 @@ const STORE_FILES: &[(&str, &str)] = &[
     ("dbman_sql_log", "sql_log.jsonl"),
     ("dbman_sql_favorites", "sql_favorites.jsonl"),
     ("dbman_ai_config", "ai_config.json"),
+    ("dbman_result_history", "result_history.json"),
 ];
 
 fn store_file(dir: &Path, key: &str) -> Option<PathBuf> {

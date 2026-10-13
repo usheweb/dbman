@@ -184,8 +184,10 @@ onBeforeUnmount(() => {
 
 .icon-select-caret {
   margin-left: auto;
+  padding-left: 4px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
   transition: transform .2s;
 }
 
@@ -193,9 +195,10 @@ onBeforeUnmount(() => {
   transform: rotate(180deg);
 }
 
-/* 位置与宽度由 syncMenuPos 以内联 fixed 定位给出 */
+/* 位置与宽度由 syncMenuPos 以内联 fixed 定位给出；
+   z-index 需高于排序面板等浮层（2000），否则菜单会被盖住 */
 .icon-select-menu {
-  z-index: 1300;
+  z-index: 2100;
   padding: 4px;
   background: var(--panel-solid);
   border: 1px solid var(--line-strong);

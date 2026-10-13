@@ -57,6 +57,13 @@
             --json-number: #6b4ee6;
             --json-bool: #008da8;
 
+            /* SQL 语法着色：取值对齐编辑器亮色主题 CodeMirror eclipse */
+            --sql-kw: #7f0055;
+            --sql-str: #2a00ff;
+            --sql-num: #116644;
+            --sql-comment: #3f7f5f;
+            --sql-ident: #0000c0;
+
             /* 字体与圆角（两套主题共用） */
             --font-ui: 'Rajdhani', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
             --font-cjk: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', sans-serif;
@@ -116,6 +123,13 @@
             --json-string: #37f5a5;
             --json-number: #b79cff;
             --json-bool: #00e5ff;
+
+            /* SQL 语法着色：取值对齐编辑器暗色主题 CodeMirror monokai */
+            --sql-kw: #f92672;
+            --sql-str: #e6db74;
+            --sql-num: #ae81ff;
+            --sql-comment: #75715e;
+            --sql-ident: #9effff;
         }
         * {
             margin: 0;
@@ -1251,9 +1265,70 @@
             flex-wrap: nowrap;
             gap: 8px;
         }
-        .editor-toolbar .btn {
-            flex: 0 0 auto;
+        /* 工具条按钮：鼠标悬停时从图标展开显示文字（SqlEditor / ResultArea / ResultFindBar 共用） */
+        .editor-toolbar .icon-btn,
+        .result-tools .icon-btn,
+        .result-find .icon-btn {
+            width: auto;
+            min-width: 30px;
+            padding: 0 7px;
+            overflow: hidden;
             white-space: nowrap;
+        }
+        .editor-toolbar .icon-btn svg,
+        .result-tools .icon-btn svg,
+        .result-find .icon-btn svg {
+            flex: 0 0 auto;
+        }
+        .editor-toolbar .icon-btn .btn-label,
+        .result-tools .icon-btn .btn-label,
+        .result-find .icon-btn .btn-label {
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0;
+            white-space: nowrap;
+            transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
+        }
+        .editor-toolbar .icon-btn:hover .btn-label,
+        .editor-toolbar .icon-btn:focus-visible .btn-label,
+        .result-tools .icon-btn:hover .btn-label,
+        .result-tools .icon-btn:focus-visible .btn-label,
+        .result-find .icon-btn:hover .btn-label,
+        .result-find .icon-btn:focus-visible .btn-label {
+            max-width: 160px;
+            opacity: 1;
+            margin-left: 6px;
+        }
+        /* 快捷键小标签：跟随 .btn-label 一起展开 */
+        .icon-btn .btn-label .kbd {
+            margin-left: 6px;
+            padding: 1px 5px;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            background: rgba(var(--void-rgb), .6);
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0;
+        }
+        /* 结果区工具条的选中态：开关型功能（时间戳/枚举/全屏）开启后保持高亮 */
+        .result-tools .icon-btn.active {
+            color: var(--cyan);
+            border-color: var(--cyan);
+            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .28), rgba(var(--cyan-rgb), .1));
+            box-shadow: var(--glow-cyan);
+        }
+        /* 执行按钮为工具条主操作：常驻青色描边，悬停时展开文字与快捷键 */
+        .editor-toolbar .icon-btn.exec-btn {
+            border-color: var(--line-strong);
+            color: var(--cyan);
+        }
+        .editor-toolbar .icon-btn.exec-btn:hover {
+            background: rgba(var(--cyan-rgb), .1);
         }
         .CodeMirror {
             flex: 1;
@@ -1265,6 +1340,48 @@
         .CodeMirror-gutters {
             background: var(--gutter-bg) !important;
             border-right: 1px solid var(--line) !important;
+        }
+        /* 行内「执行这一行」：行号左侧的播放按钮，默认隐藏，鼠标移到该行 gutter 上才浮现 */
+        .CodeMirror-gutter.run-gutter {
+            width: 18px;
+            cursor: pointer;
+        }
+        /* gutter 容器自身高度为 0（子元素全是绝对定位），这里撑满行高，
+           否则下面的 marker 元素按 top/bottom 拉伸时高度也是 0，图标就贴不到行的垂直中间 */
+        .query-editor .CodeMirror-gutter-wrapper {
+            top: 0;
+            bottom: 0;
+        }
+        /* 每行的 gutter 元素（非行号那个）撑满行高并居中按钮 */
+        .query-editor .CodeMirror-gutter-wrapper > .CodeMirror-gutter-elt:not(.CodeMirror-linenumber) {
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .run-gutter-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            opacity: 0;
+            color: var(--cyan);
+            transition: opacity .15s ease, background .15s ease;
+        }
+        .run-gutter-btn svg {
+            width: 13px;
+            height: 13px;
+            display: block;
+        }
+        /* 鼠标移到该行任意位置（代码区或行号区）都浮现播放按钮，避免只有 18px 的 gutter 条能命中 */
+        .query-editor .CodeMirror-code > div:hover .run-gutter-btn,
+        .query-editor .CodeMirror-gutter-wrapper > .CodeMirror-gutter-elt:not(.CodeMirror-linenumber):hover .run-gutter-btn {
+            opacity: 1;
+            background: rgba(var(--cyan-rgb), .14);
         }
         /* SQL 补全下拉（跟随 Dark Sci-Fi 主题，覆盖 addon 默认的浅色样式） */
         .CodeMirror-hints {
@@ -1295,6 +1412,24 @@
         li.CodeMirror-hint-keyword {
             color: var(--violet) !important;
         }
+        /* 弹窗里只读 SQL 的语法着色，配色对齐编辑器（配合 utils/sql.js 的 highlightSqlSyntax）。
+           这些 class 是 v-html 注入的，作用域样式命中不到，必须放在全局 */
+        .sql-kw {
+            font-weight: 700;
+            color: var(--sql-kw);
+        }
+        .sql-str {
+            color: var(--sql-str);
+        }
+        .sql-num {
+            color: var(--sql-num);
+        }
+        .sql-comment {
+            color: var(--sql-comment);
+        }
+        .sql-ident {
+            color: var(--sql-ident);
+        }
         .result-area {
             flex: 1;
             overflow: hidden;
@@ -1322,28 +1457,24 @@
             gap: 8px;
             align-items: center;
         }
-        .mode-toggle {
-            padding: 3px 10px;
+        /* 历史查询结果下拉：复用数据库选择器（IconSelect）的样式，压缩成与工具条图标按钮同一行高度 */
+        .result-tools .history-picker {
+            width: 240px;
+            min-width: 0;
+        }
+        .result-tools .history-picker .icon-select-trigger {
+            height: 30px;
+            padding: 0 10px;
+            gap: 6px;
             border-radius: var(--radius);
-            border: 1px solid var(--line);
-            background: rgba(var(--cyan-rgb), .04);
-            color: var(--text-dim);
-            font-family: var(--font-cjk);
-            font-size: 12px;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all .2s ease;
-        }
-        .mode-toggle:hover {
-            border-color: var(--line-strong);
-            color: var(--text);
-            transform: translateY(-1px);
-        }
-        .mode-toggle.active {
-            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .28), rgba(var(--cyan-rgb), .1));
-            border-color: var(--cyan);
             color: var(--cyan);
-            box-shadow: var(--glow-cyan);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: .5px;
+        }
+        .result-tools .history-picker .icon-select-caret {
+            color: var(--cyan);
+            opacity: .7;
         }
         .col-mode {
             display: inline-block;
@@ -1377,7 +1508,8 @@
             padding: 0 16px 16px;
         }
         .data-table {
-            width: 100%;
+            /* 列宽按内容自适应，不强制铺满结果区；内容过宽时由 .result-content 横向滚动 */
+            width: auto;
             margin-top: 16px;
             border-collapse: collapse;
             font-size: 13px;
@@ -1504,30 +1636,6 @@
         .find-filter input {
             accent-color: var(--cyan);
             cursor: pointer;
-        }
-        .find-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 26px;
-            height: 26px;
-            padding: 0;
-            border-radius: 6px;
-            border: 1px solid var(--line);
-            background: rgba(var(--cyan-rgb), .05);
-            color: var(--cyan);
-            cursor: pointer;
-            transition: all .2s ease;
-        }
-        .find-btn:hover {
-            border-color: var(--line-strong);
-            box-shadow: var(--glow-cyan);
-            transform: translateY(-1px);
-        }
-        .find-btn svg {
-            width: 13px;
-            height: 13px;
-            display: block;
         }
         /* 命中高亮：用次强调色，避免和错误态的洋红混淆；当前定位的那一处再加强 */
         .data-table tbody tr td.cell-match {
@@ -1876,6 +1984,10 @@
             align-items: center;
             z-index: 1000;
         }
+        /* 通用文本输入弹窗可能从其它弹窗（如表结构设计器）内部唤起，需要盖在其上 */
+        .modal.modal-top {
+            z-index: 1200;
+        }
         .hidden {
             display: none;
         }
@@ -2114,6 +2226,19 @@
         }
         .dz-row select {
             cursor: pointer;
+        }
+        /* 类型列改用下拉选择（复用 IconSelect），外观对齐同排输入框的紧凑尺寸 */
+        .dz-row .dz-type-select .icon-select-trigger {
+            padding: 6px 10px;
+            border-radius: 6px;
+            color: var(--text);
+            font-family: var(--font-ui);
+            font-size: 12.5px;
+            letter-spacing: .3px;
+        }
+        .dz-row .dz-type-select .icon-select-caret {
+            color: var(--text-dim);
+            opacity: 1;
         }
         .dz-c {
             display: flex;

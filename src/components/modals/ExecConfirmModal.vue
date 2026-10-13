@@ -1,10 +1,14 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue';
+import { computed, ref, watch, nextTick } from 'vue';
 import ModalShell from '@/components/common/ModalShell.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { highlightSqlSyntax } from '@/utils/sql';
 
 const ws = useWorkspaceStore();
 const okBtn = ref(null);
+
+// 待执行 SQL 按关键字着色，配色对齐 SQL 编辑器
+const confirmSqlHtml = computed(() => highlightSqlSyntax(String(ws.execConfirm.sql || '').trim()));
 
 watch(() => ws.execConfirm.visible, async (v) => {
   if (v) {
@@ -20,7 +24,7 @@ watch(() => ws.execConfirm.visible, async (v) => {
     <div class="confirm-body">
       <span class="confirm-warn">{{ ws.execConfirm.kinds.join(' / ') }}</span>
       <div class="confirm-tip">该语句会改动数据库的数据、结构或运行状态，部分操作不可撤销，请确认无误后再执行：</div>
-      <pre class="confirm-sql">{{ ws.execConfirm.sql.trim() }}</pre>
+      <pre class="confirm-sql" v-html="confirmSqlHtml"></pre>
     </div>
     <div class="confirm-actions">
       <button class="btn btn-secondary" @click="ws.resolveExecConfirm(false)">取消</button>

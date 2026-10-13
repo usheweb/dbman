@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/ui';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useSqlStore } from '@/stores/sql';
 import { escapeHtml } from '@/utils/escape';
+import { highlightSqlSyntax } from '@/utils/sql';
 import { formatDateTime } from '@/utils/format';
 
 const ui = useUiStore();
@@ -24,19 +25,20 @@ watch(() => ui.modals.sqlFavModal, async (v) => {
   }
 });
 
-function highlightSql(sql, kw) {
+// 名称 / 备注不是 SQL，只做检索命中高亮
+function highlightHit(text, kw) {
   const k = String(kw).toLowerCase();
-  if (!k) return escapeHtml(sql);
-  const lower = String(sql).toLowerCase();
+  if (!k) return escapeHtml(text);
+  const lower = String(text).toLowerCase();
   let out = '';
   let pos = 0;
   let i = lower.indexOf(k, pos);
   while (i !== -1) {
-    out += escapeHtml(sql.slice(pos, i)) + '<span class="log-hit">' + escapeHtml(sql.slice(i, i + k.length)) + '</span>';
+    out += escapeHtml(text.slice(pos, i)) + '<span class="log-hit">' + escapeHtml(text.slice(i, i + k.length)) + '</span>';
     pos = i + k.length;
     i = lower.indexOf(k, pos);
   }
-  return out + escapeHtml(sql.slice(pos));
+  return out + escapeHtml(text.slice(pos));
 }
 
 function useFav(id) {
@@ -76,15 +78,15 @@ function clearFavs() {
       <div class="log-item" v-for="x in items" :key="x.f.id" @click="useFav(x.f.id)" title="点击载入编辑器">
         <div class="log-meta">
           <span class="log-type" :class="sqlStore.sqlLogClass(x.f.type)">{{ x.f.type }}</span>
-          <span class="fav-name" v-html="keyword ? highlightSql(sqlStore.favDisplayName(x.f), keyword) : escapeHtml(sqlStore.favDisplayName(x.f))"></span>
+          <span class="fav-name" v-html="keyword ? highlightHit(sqlStore.favDisplayName(x.f), keyword) : escapeHtml(sqlStore.favDisplayName(x.f))"></span>
           <span>{{ formatDateTime(new Date(x.f.t)) }}</span>
           <span v-if="x.f.db">库: {{ x.f.db }}</span>
           <span v-if="x.f.conn">连接: {{ x.f.conn }}</span>
           <button class="fav-act" title="编辑名称 / 备注" @click.stop="editFav(x.f)">&#9998;</button>
           <button class="log-del" title="删除这条收藏" @click.stop="deleteFav(x.f)">&times;</button>
         </div>
-        <div class="fav-note" v-if="x.f.note" v-html="keyword ? highlightSql(x.f.note, keyword) : escapeHtml(x.f.note)"></div>
-        <div class="log-sql" v-html="keyword ? highlightSql(x.f.sql, keyword) : escapeHtml(x.f.sql)"></div>
+        <div class="fav-note" v-if="x.f.note" v-html="keyword ? highlightHit(x.f.note, keyword) : escapeHtml(x.f.note)"></div>
+        <div class="log-sql" v-html="highlightSqlSyntax(x.f.sql, keyword)"></div>
       </div>
       <div class="log-empty" v-if="!items.length">{{ sqlStore.sqlFavs.length ? '没有匹配的收藏' : '暂无收藏，可在编辑器或 SQL 日志里点 ☆ 收藏' }}</div>
     </div>

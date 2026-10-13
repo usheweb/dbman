@@ -51,11 +51,18 @@ defineExpose({ clear });
     <label class="find-filter" title="勾选后只显示包含查找内容的行">
       <input type="checkbox" :checked="ws.findState.only" @change="onToggle">过滤
     </label>
-    <button class="find-btn" title="查找 / 下一处" @click="onFind">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg>
+    <button class="icon-btn find-btn" title="查找 / 下一处" @click="onFind">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="M15.5 15.5L20 20" />
+      </svg>
+      <span class="btn-label">查找</span>
     </button>
-    <button class="find-btn" title="清除查找" @click="onClear">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    <button class="icon-btn find-btn" title="清除查找" @click="onClear">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+      <span class="btn-label">清除</span>
     </button>
   </div>
 </template>

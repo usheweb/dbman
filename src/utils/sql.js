@@ -471,3 +471,79 @@ export function formatSql(sql) {
     linesBetweenQueries: 2
   });
 }
+
+// ===== 只读 SQL 语法着色：弹窗里展示 SQL 时用，配色由 theme.css 的 --sql-* 变量决定 =====
+
+// 参与着色的 MySQL 关键字 / 类型 / 表选项
+const HIGHLIGHT_KEYWORDS = new Set(`ADD ALL ALTER AND AS ASC AUTO_INCREMENT BEGIN BETWEEN BIGINT BINARY BLOB BOOLEAN BOTH BY CASCADE CASE CHANGE CHAR CHARACTER CHARSET CHECK COLLATE COLLATION COLUMN COMMENT COMMIT CONSTRAINT CONVERT CREATE CROSS CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP DATABASE DATABASES DATE DATETIME DECIMAL DEFAULT DELAYED DELETE DESC DESCRIBE DISTINCT DIV DO DOUBLE DROP DUAL EACH ELSE ELSEIF ENUM ESCAPE EXISTS EXPLAIN FALSE FETCH FLOAT FOR FORCE FOREIGN FROM FULL FUNCTION GRANT GROUP HAVING HIGH_PRIORITY IF IGNORE IN INDEX INFILE INNER INSERT INT INTEGER INTERVAL INTO IS JOIN KEY KEYS KILL LEADING LEFT LIKE LIMIT LINES LOAD LOCALTIME LOCALTIMESTAMP LOCK LONG LONGBLOB LONGTEXT LOW_PRIORITY MATCH MAXVALUE MEDIUMBLOB MEDIUMINT MEDIUMTEXT MODIFIES NATURAL NOT NULL NUMERIC OFFSET ON OPTIMIZE OPTION OR ORDER OUTER OUTFILE PRIMARY PROCEDURE RANGE READ REAL REFERENCES REGEXP RENAME REPEAT REPLACE REQUIRE RESTRICT RETURN REVOKE RIGHT RLIKE ROLLBACK ROW ROWS SELECT SET SHOW SMALLINT SPATIAL SQL SSL STARTING STRAIGHT_JOIN TABLE TABLES TEMPORARY TERMINATED TEXT THEN TIME TIMESTAMP TINYBLOB TINYINT TINYTEXT TO TRAILING TRIGGER TRUE TRUNCATE UNIQUE UNSIGNED UPDATE USAGE USE USING VALUES VARBINARY VARCHAR VIEW WHEN WHERE WHILE WITH WRITE XOR YEAR ZEROFILL`.split(' '));
+
+function escapeForHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 在已转义的片段里再套一层检索命中（log-hit）；关键词含 & < > 时直接跳过，避免破坏结构
+function wrapHit(escaped, kw) {
+  if (!kw || /[&<>]/.test(kw)) return escaped;
+  const lower = escaped.toLowerCase();
+  const needle = kw.toLowerCase();
+  let out = '';
+  let pos = 0;
+  let i = lower.indexOf(needle, pos);
+  while (i !== -1) {
+    out += escaped.slice(pos, i) + '<span class="log-hit">' + escaped.slice(i, i + needle.length) + '</span>';
+    pos = i + needle.length;
+    i = lower.indexOf(needle, pos);
+  }
+  return out + escaped.slice(pos);
+}
+
+// SQL -> 带 class 的 HTML。searchKeyword 可选，用于日志/收藏弹窗里同时保留检索命中高亮
+export function highlightSqlSyntax(sql, searchKeyword) {
+  const src = String(sql == null ? '' : sql);
+  const kw = searchKeyword ? String(searchKeyword) : '';
+  const out = [];
+  const plain = t => wrapHit(escapeForHtml(t), kw);
+  const token = (cls, t) => '<span class="' + cls + '">' + wrapHit(escapeForHtml(t), kw) + '</span>';
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    const two = src.slice(i, i + 2);
+    if (two === '/*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out.push(token('sql-comment', src.slice(i, stop)));
+      i = stop;
+    } else if (two === '--' || ch === '#') {
+      let stop = i;
+      while (stop < src.length && src[stop] !== '\n' && src[stop] !== '\r') stop++;
+      out.push(token('sql-comment', src.slice(i, stop)));
+      i = stop;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      // 字符串 / 反引号标识符：'' 与 `` 是转义写法，反斜杠转义只在字符串里生效
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === '\\' && ch !== '`') { j += 2; continue; }
+        if (src[j] === ch) {
+          j++;
+          if (src[j] === ch) { j++; continue; }
+          break;
+        }
+        j++;
+      }
+      out.push(token(ch === '`' ? 'sql-ident' : 'sql-str', src.slice(i, j)));
+      i = j;
+    } else if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(src[i + 1] || ''))) {
+      const m = src.slice(i).match(/^(?:0x[0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/);
+      out.push(token('sql-num', m[0]));
+      i += m[0].length;
+    } else if (/[A-Za-z_$@]/.test(ch)) {
+      const m = src.slice(i).match(/^[A-Za-z_$@][\w$@]*/);
+      out.push(HIGHLIGHT_KEYWORDS.has(m[0].toUpperCase()) ? token('sql-kw', m[0]) : plain(m[0]));
+      i += m[0].length;
+    } else {
+      out.push(plain(ch));
+      i++;
+    }
+  }
+  return out.join('');
+}

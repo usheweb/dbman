@@ -1,10 +1,12 @@
 <script setup>
-// 视图设置：控制表列表里展示哪些信息（表注释 / 数据行数与大小）
-// 勾选后立即生效并写入本地存储，不需要额外保存
+// 视图设置：控制表列表里展示哪些信息（表注释 / 数据行数与大小）+ 查询结果历史条数上限
+// 修改后立即生效并写入本地存储，不需要额外保存
 import ModalShell from '@/components/common/ModalShell.vue';
 import { useUiStore } from '@/stores/ui';
+import { useWorkspaceStore } from '@/stores/workspace';
 
 const ui = useUiStore();
+const ws = useWorkspaceStore();
 
 const OPTIONS = [
   { key: 'tableComment', label: '表注释', hint: '在表名下方显示表注释说明' },
@@ -13,6 +15,17 @@ const OPTIONS = [
 
 function toggle(key, checked) {
   ui.saveViewOpts({ [key]: checked });
+}
+
+// 历史条数：限制在 1~1000，越界时把输入框的值回写成生效值
+function saveHistoryMax(ev) {
+  const el = ev.target;
+  let n = parseInt(el.value, 10);
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > 1000) n = 1000;
+  el.value = n;
+  ui.saveViewOpts({ resultHistoryMax: n });
+  ws.trimHistories();
 }
 </script>
 
@@ -33,6 +46,24 @@ function toggle(key, checked) {
           @change="toggle(opt.key, $event.target.checked)"
         >
       </label>
+      <div class="vs-row vs-row-static">
+        <span class="vs-text">
+          <span class="vs-label">查询结果历史条数</span>
+          <span class="vs-hint">结果区下拉可切换回看的最近查询结果，最多保留多少条</span>
+        </span>
+        <input
+          type="number"
+          class="vs-num"
+          min="1"
+          max="1000"
+          step="1"
+          :value="ui.viewOpts.resultHistoryMax"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          @change="saveHistoryMax"
+        >
+      </div>
     </div>
 
     <div class="vs-actions">
@@ -92,6 +123,31 @@ function toggle(key, checked) {
   height: 16px;
   accent-color: var(--cyan);
   cursor: pointer;
+}
+
+/* 数字输入行不可点击整行，去掉 hand 光标 */
+.vs-row-static {
+  cursor: default;
+}
+
+.vs-num {
+  flex: 0 0 auto;
+  width: 88px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(var(--void-rgb), .5);
+  color: var(--text);
+  font-family: var(--font-cjk);
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  transition: all .2s ease;
+}
+
+.vs-num:focus {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
 }
 
 .vs-actions {

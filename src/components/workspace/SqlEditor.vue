@@ -25,12 +25,38 @@ const theme = useThemeStore();
 const ta = ref(null);
 let cm = null;
 
+// 行内「执行这一行」用的自定义 gutter，排在行号左侧
+const RUN_GUTTER = 'run-gutter';
+
+function runMarker() {
+  const el = document.createElement('span');
+  el.className = 'run-gutter-btn';
+  el.title = '执行这一行 SQL';
+  el.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  return el;
+}
+
+// 给每一行补上播放图标；已有 marker 的行跳过，避免重复创建 DOM
+function fillRunGutters() {
+  if (!cm) return;
+  cm.operation(() => {
+    const total = cm.lineCount();
+    for (let i = 0; i < total; i++) {
+      const handle = cm.getLineHandle(i);
+      if (!handle.gutterMarkers || !handle.gutterMarkers[RUN_GUTTER]) {
+        cm.setGutterMarker(handle, RUN_GUTTER, runMarker());
+      }
+    }
+  });
+}
+
 onMounted(() => {
   cm = CodeMirror.fromTextArea(ta.value, {
     mode: 'text/x-mysql',
     // 跟随全局主题：亮色 eclipse / 暗色 monokai，主题切换时由下方 watch 同步
     theme: theme.editorTheme,
     lineNumbers: true,
+    gutters: ['run-gutter', 'CodeMirror-linenumbers'],
     indentWithTabs: false,
     // 与 formatSql 的缩进保持一致（2 空格），否则回车续行与格式化结果缩进不同
     indentUnit: 2,
@@ -52,8 +78,23 @@ onMounted(() => {
     if (!typed || typed.length !== 1 || !/[\w.]/.test(typed)) return;
     showSqlHint(instance, conn);
   });
+  // 行内「执行这一行」：点击行号左侧的播放图标只跑该行 SQL，不覆盖编辑器内容
+  cm.on('gutterClick', (instance, line, gutter) => {
+    if (gutter !== RUN_GUTTER) return;
+    const text = (instance.getLine(line) || '').trim();
+    if (!text) {
+      ui.showToast('这一行没有可执行的 SQL', 'error');
+      return;
+    }
+    ws.executeSqlText(text);
+  });
+  // 增删行后给新行补上播放图标
+  cm.on('changes', fillRunGutters);
   // 编辑器是全局单实例：切连接会重建，这里把当前连接的 SQL 草稿灌回去
   ws.applyDraft();
+  fillRunGutters();
+  // CodeMirror 5 对 gutter marker 是懒渲染，初次挂载后强制刷新一次，否则播放图标不出 DOM
+  cm.refresh();
 });
 
 // 主题切换时同步 CodeMirror 皮肤（实例只初始化一次，这里改 option 即可）
@@ -130,11 +171,13 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           </svg>
+          <span class="btn-label">打开文件</span>
         </button>
         <button class="icon-btn" title="SQL 收藏列表" @click="ui.openModal('sqlFavModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" />
           </svg>
+          <span class="btn-label">收藏列表</span>
         </button>
         <button class="icon-btn" title="SQL 日志列表" @click="ui.openModal('sqlLogModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -142,11 +185,13 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
             <path d="M3 4v4h4" />
             <path d="M12 7.5V12l3 1.8" />
           </svg>
+          <span class="btn-label">SQL 日志</span>
         </button>
         <button class="icon-btn" title="收藏当前 SQL" @click="openFavFromEditor">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.8l5.8-.9z" />
           </svg>
+          <span class="btn-label">收藏</span>
         </button>
         <button class="icon-btn" title="格式化 SQL" @click="onFormat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -154,8 +199,14 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
             <path d="M4 12h9" />
             <path d="M4 18h14" />
           </svg>
+          <span class="btn-label">格式化</span>
         </button>
-        <button class="btn" @click="ws.executeQuery()">执行 (Ctrl+Enter)</button>
+        <button class="icon-btn exec-btn" title="执行 SQL（Ctrl+Enter）" @click="ws.executeQuery()">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span class="btn-label">执行 <span class="kbd">Ctrl+Enter</span></span>
+        </button>
         <button
           class="icon-btn"
           :title="ui.viewOpts.sqlCollapsed ? '展开 SQL 编辑器' : '收起 SQL 编辑器，把空间让给结果区'"
@@ -164,6 +215,7 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path :d="ui.viewOpts.sqlCollapsed ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'" />
           </svg>
+          <span class="btn-label">{{ ui.viewOpts.sqlCollapsed ? '展开' : '收起' }}</span>
         </button>
       </div>
     </div>

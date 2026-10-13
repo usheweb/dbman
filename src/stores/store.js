@@ -14,7 +14,8 @@ export const STORE_KEYS = [
   'dbman_table_sort',
   'dbman_sql_log',
   'dbman_sql_favorites',
-  'dbman_ai_config'
+  'dbman_ai_config',
+  'dbman_result_history'
 ];
 
 export const useStoreStore = defineStore('store', () => {

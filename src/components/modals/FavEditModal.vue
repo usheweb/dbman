@@ -3,6 +3,7 @@ import { ref, watch, nextTick } from 'vue';
 import ModalShell from '@/components/common/ModalShell.vue';
 import { useUiStore } from '@/stores/ui';
 import { useSqlStore } from '@/stores/sql';
+import { highlightSqlSyntax } from '@/utils/sql';
 
 const ui = useUiStore();
 const sqlStore = useSqlStore();
@@ -37,7 +38,7 @@ function save() {
     </div>
     <div class="form-group">
       <label>SQL</label>
-      <div class="filter-preview">{{ sqlStore.favDraft.sql }}</div>
+      <div class="filter-preview" v-html="highlightSqlSyntax(sqlStore.favDraft.sql)"></div>
     </div>
     <div class="filter-actions">
       <button class="btn btn-secondary" @click="ui.closeModal('favEditModal')">取消</button>

@@ -1,5 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
+import CodeMirror from 'codemirror';
+import 'codemirror/mode/sql/sql.js';
 import ModalShell from '@/components/common/ModalShell.vue';
 import DesignerFields from '@/components/database/designer/DesignerFields.vue';
 import DesignerIndexes from '@/components/database/designer/DesignerIndexes.vue';
@@ -8,11 +10,13 @@ import DesignerTableOptions from '@/components/database/designer/DesignerTableOp
 import { useTableStore } from '@/stores/table';
 import { useConnectionStore } from '@/stores/connection';
 import { useUiStore } from '@/stores/ui';
+import { useThemeStore } from '@/stores/theme';
 import { buildAlterScript, toDraftColumns, toDraftIndexes, toDraftForeignKeys } from '@/utils/ddl';
 
 const table = useTableStore();
 const conn = useConnectionStore();
 const ui = useUiStore();
+const theme = useThemeStore();
 
 const TABS = [
   { key: 'fields', label: '字段' },
@@ -31,6 +35,37 @@ const indexes = ref([]);
 const foreignKeys = ref([]);
 const options = ref({ engine: null, charset: null, collation: null, comment: null, autoIncrement: null });
 const sql = ref('');
+
+// ALTER 语句用 CodeMirror（与 SQL 编辑器同一套），既能关键词着色又能手工编辑
+const taRef = ref(null);
+let cm = null;
+
+function ensureCm() {
+  if (cm || !taRef.value) return;
+  cm = CodeMirror.fromTextArea(taRef.value, {
+    mode: 'text/x-mysql',
+    theme: theme.editorTheme,
+    lineNumbers: true,
+    indentWithTabs: false,
+    indentUnit: 2,
+    tabSize: 2,
+    lineWrapping: true
+  });
+  cm.setValue(sql.value);
+  // 用户在编辑器里改动即视为手工修改，暂停自动生成
+  cm.on('change', () => {
+    const v = cm.getValue();
+    if (v === sql.value) return;
+    sql.value = v;
+    manual.value = true;
+  });
+}
+
+function destroyCm() {
+  if (!cm) return;
+  cm.toTextArea();
+  cm = null;
+}
 
 const tableName = computed(() => table.designerModal.table);
 const refTables = computed(() => conn.allTables.map(t => t.tableName));
@@ -53,6 +88,12 @@ async function load() {
     table.closeDesigner();
   } finally {
     loading.value = false;
+    // 结构表单渲染出来后再建 CodeMirror，并刷新一次尺寸
+    await nextTick();
+    if (table.designerModal.visible) {
+      ensureCm();
+      cm?.refresh();
+    }
   }
 }
 
@@ -64,6 +105,8 @@ function regenerate() {
     tableName.value
   );
   manual.value = false;
+  // 同步到编辑器；此时 sql.value 已等于新值，change 回调不会把它当成手工修改
+  if (cm) cm.setValue(sql.value);
 }
 
 // 结构表单改动后自动重算 SQL；用户手工改过 SQL 就不再覆盖
@@ -71,11 +114,13 @@ watch([columns, indexes, foreignKeys, options], () => {
   if (!manual.value) regenerate();
 }, { deep: true });
 
-watch(() => table.designerModal.visible, (v) => { if (v) load(); });
+// 主题切换时同步 CodeMirror 皮肤
+watch(() => theme.editorTheme, (name) => { if (cm) cm.setOption('theme', name); });
 
-function onSqlInput() {
-  manual.value = true;
-}
+watch(() => table.designerModal.visible, (v) => {
+  if (v) load();
+  else destroyCm();
+});
 
 async function apply() {
   const script = sql.value.trim().replace(/;+$/, '') + ';';
@@ -136,14 +181,13 @@ function close() {
         <span v-if="manual" class="dz-manual">已手工修改，自动生成已暂停</span>
         <button class="btn btn-secondary dz-regen" @click="regenerate">重新生成</button>
       </div>
-      <textarea
-        class="dz-sql"
-        rows="9"
-        autocapitalize="off" autocorrect="off" spellcheck="false"
-        v-model="sql"
-        placeholder="未检测到结构变更"
-        @input="onSqlInput"
-      ></textarea>
+      <div class="dz-sql-wrap">
+        <textarea
+          ref="taRef"
+          autocapitalize="off" autocorrect="off" spellcheck="false"
+          placeholder="未检测到结构变更"
+        ></textarea>
+      </div>
 
       <div class="dz-actions">
         <span class="dz-hint">{{ hasChanges ? '执行前请确认 SQL 正确；DDL 无法回滚。' : '未检测到结构变更。' }}</span>
@@ -227,26 +271,21 @@ function close() {
   padding: 5px 12px;
   font-size: 12px;
 }
-.dz-sql {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px 14px;
+/* ALTER 语句编辑器：外观对齐原来的 textarea，内部是 CodeMirror（关键词着色 + 行号） */
+.dz-sql-wrap :deep(.CodeMirror) {
+  height: 190px !important;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(var(--void-rgb), .55);
   color: var(--editor-fg);
-  font-family: var(--font-mono);
   font-size: 12.5px;
   letter-spacing: 0;
   line-height: 1.6;
-  outline: none;
-  resize: vertical;
   transition: border-color .18s, box-shadow .18s;
 }
-.dz-sql:hover {
+.dz-sql-wrap :deep(.CodeMirror:hover) {
   border-color: var(--line-strong);
 }
-.dz-sql:focus {
+.dz-sql-wrap :deep(.CodeMirror-focused) {
   border-color: var(--cyan);
   box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25), 0 0 14px -3px rgba(var(--cyan-rgb), .6);
 }
