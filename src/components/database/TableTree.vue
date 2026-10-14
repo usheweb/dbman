@@ -188,6 +188,7 @@ function onMenuSelect(item) {
         >
           <span class="sort-arrow">⇅</span>
           <span v-if="sortKeys.length > 1" class="sort-badge">{{ sortKeys.length }}</span>
+          <span class="btn-label">排序</span>
         </button>
         <TableSortMenu
           v-if="sortVisible"
@@ -201,7 +202,10 @@ function onMenuSelect(item) {
         class="panel-toggle"
         @click="ui.togglePanel('tree')"
         :title="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
-      >{{ ui.panelState.tree ? '›' : '‹' }}</button>
+      >
+        <span class="toggle-glyph">{{ ui.panelState.tree ? '›' : '‹' }}</span>
+        <span class="btn-label">{{ ui.panelState.tree ? '展开' : '收起' }}</span>
+      </button>
     </div>
     <div v-if="connStore.currentDatabase" class="tree-count-row" :title="tableCountText">{{ tableCountText }}</div>
     <div id="tableList">

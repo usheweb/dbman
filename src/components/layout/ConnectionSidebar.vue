@@ -17,7 +17,10 @@ const connStore = useConnectionStore();
           class="panel-toggle"
           :title="(ui.panelState.sidebar ? '展开' : '收起') + ui.panelTitle('sidebar') + '列'"
           @click="ui.togglePanel('sidebar')"
-        >{{ ui.panelState.sidebar ? '›' : '‹' }}</button>
+        >
+          <span class="toggle-glyph">{{ ui.panelState.sidebar ? '›' : '‹' }}</span>
+          <span class="btn-label">{{ ui.panelState.sidebar ? '展开' : '收起' }}</span>
+        </button>
       </div>
     </div>
     <div class="connection-list">

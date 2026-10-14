@@ -18,6 +18,7 @@ import ExecConfirmModal from '@/components/modals/ExecConfirmModal.vue';
 import ExportModal from '@/components/modals/ExportModal.vue';
 import FilterModal from '@/components/modals/FilterModal.vue';
 import SqlLogModal from '@/components/modals/SqlLogModal.vue';
+import ResultHistoryModal from '@/components/modals/ResultHistoryModal.vue';
 import SqlFavModal from '@/components/modals/SqlFavModal.vue';
 import FavEditModal from '@/components/modals/FavEditModal.vue';
 import AiConfigModal from '@/components/modals/AiConfigModal.vue';
@@ -120,6 +121,7 @@ onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMe
   <ExportModal />
   <FilterModal />
   <SqlLogModal />
+  <ResultHistoryModal />
   <SqlFavModal />
   <FavEditModal />
   <AiConfigModal />

@@ -110,7 +110,9 @@ function onDocMousedown(ev) {
   close();
 }
 
-onMounted(() => document.addEventListener('mousedown', onDocMousedown));
+onMounted(() => {
+  document.addEventListener('mousedown', onDocMousedown);
+});
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocMousedown);
   removeFloatingListeners();

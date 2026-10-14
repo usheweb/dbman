@@ -279,13 +279,17 @@
         }
         /* 侧栏（连接 / 表列表）收起与展开 */
         .panel-toggle {
+            position: relative;
             flex: 0 0 auto;
-            width: 22px;
+            width: auto;
+            min-width: 22px;
             height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0;
+            padding: 0 4px;
+            overflow: visible;
+            white-space: nowrap;
             border-radius: 6px;
             border: 1px solid var(--line);
             background: rgba(var(--cyan-rgb), .05);
@@ -299,6 +303,11 @@
         .panel-toggle:hover {
             border-color: var(--line-strong);
             box-shadow: var(--glow-cyan);
+        }
+        /* 箭头字形固定，展开文字时不参与压缩 */
+        .panel-toggle .toggle-glyph {
+            flex: 0 0 auto;
+            line-height: 1;
         }
         .tree-filter-row {
             display: flex;
@@ -319,6 +328,7 @@
             align-items: center;
         }
         .tree-sort-btn {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 3px;
@@ -347,6 +357,63 @@
             font-family: var(--font-mono);
             font-size: 10px;
             opacity: .9;
+        }
+        /* 侧栏按钮悬停文案：按钮本体只留图标，文字做成「绝对定位浮标」弹出，
+           完全脱离文档流——既不撑宽按钮、不推移相邻元素，也不会被窄栏裁切。
+           .panel-toggle 与 .tree-sort-btn 复用同一套显示 / 延迟收起逻辑。
+           展开态浮标挂在按钮正下方（右对齐，始终落在面板内，避开面板的 overflow 裁切）。 */
+        .panel-toggle .btn-label,
+        .tree-sort-btn .btn-label {
+            display: block;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            width: max-content;
+            max-width: none;
+            margin-left: 0;
+            padding: 3px 8px;
+            border: 1px solid var(--line-strong);
+            border-radius: 6px;
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: var(--glow-cyan);
+            color: var(--cyan);
+            font-family: var(--font-cjk);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            /* 抬到同层定位兄弟（如 .connection-item）之上，浮标才不会被盖住 */
+            z-index: 1;
+            transition: opacity .16s ease;
+            /* 鼠标移开后延迟 1s 再收起 */
+            transition-delay: 1s;
+        }
+        .panel-toggle:hover .btn-label,
+        .panel-toggle:focus-visible .btn-label,
+        .tree-sort-btn:hover .btn-label,
+        .tree-sort-btn:focus-visible .btn-label {
+            opacity: 1;
+            /* 展开即时，延迟只作用于收起 */
+            transition-delay: 0s;
+        }
+        /* 收起态：面板只剩 46px 宽的一个箭头，浮标落在面板内会被裁掉，
+           改为从按钮右侧弹出到面板外（收起态悬停时放开面板裁切，见下） */
+        .sidebar.collapsed .sidebar-header .panel-toggle .btn-label,
+        .db-tree.collapsed .tree-filter-row .panel-toggle .btn-label {
+            right: auto;
+            left: calc(100% + 8px);
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        /* 悬停收起态面板时放开裁切并抬高层级，浮层文字才能盖住相邻面板 */
+        .sidebar.collapsed:hover,
+        .db-tree.collapsed:hover {
+            overflow: visible;
+            z-index: 20;
         }
         /* 表列表上方的数量统计：无过滤词给全量，有过滤词给「命中 / 总数」 */
         .tree-count-row {
@@ -824,6 +891,91 @@
             background: rgba(var(--cyan-rgb), .12);
             color: var(--cyan);
             text-shadow: 0 0 8px rgba(var(--cyan-rgb), .65);
+        }
+        /* 查询结果历史弹窗：逐条展示完整 SQL（原下拉框只能看到被截断的一行摘要） */
+        .hist-tools {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .hist-tools .find-input {
+            flex: 1;
+            min-width: 0;
+        }
+        .hist-count {
+            flex: 0 0 auto;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .hist-list {
+            max-height: 64vh;
+            overflow-y: auto;
+        }
+        .hist-item {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(var(--overlay-rgb), .02);
+            cursor: pointer;
+            transition: all .2s ease;
+        }
+        .hist-item:hover {
+            border-color: var(--line-strong);
+            background: rgba(var(--cyan-rgb), .06);
+            transform: translateY(-1px);
+        }
+        .hist-item.active {
+            border-color: var(--cyan-soft);
+            background: rgba(var(--cyan-rgb), .08);
+        }
+        .hist-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .hist-time {
+            color: var(--text);
+        }
+        .hist-flag {
+            padding: 1px 7px;
+            border-radius: 4px;
+            border: 1px solid rgba(var(--cyan-rgb), .45);
+            background: rgba(var(--cyan-rgb), .1);
+            color: var(--cyan);
+            font-family: var(--font-cjk);
+            font-size: 11px;
+            letter-spacing: .5px;
+        }
+        .hist-load {
+            flex: 0 0 auto;
+            margin-left: auto;
+            padding: 3px 10px;
+            font-size: 12px;
+        }
+        /* 完整 SQL：保留换行、自动折行，不截断 */
+        .hist-sql {
+            margin: 0;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .hist-empty {
+            padding: 28px 10px;
+            color: var(--text-dim);
+            font-family: var(--font-cjk);
+            font-size: 13px;
+            text-align: center;
         }
         .fav-act {
             flex: 0 0 auto;
@@ -1357,8 +1509,8 @@
             letter-spacing: 0;
             white-space: nowrap;
             transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
-            /* 鼠标移开后延迟 2s 再收起文字：扫过按钮时不至于一闪一收 */
-            transition-delay: 2s;
+            /* 鼠标移开后延迟 1s 再收起文字：扫过按钮时不至于一闪一收 */
+            transition-delay: 1s;
         }
         .editor-toolbar .icon-btn:hover .btn-label,
         .editor-toolbar .icon-btn:focus-visible .btn-label,
@@ -1552,25 +1704,6 @@
             flex: 0 0 auto;
             gap: 8px;
             align-items: center;
-        }
-        /* 历史查询结果下拉：复用数据库选择器（IconSelect）的样式，压缩成与工具条图标按钮同一行高度 */
-        .result-tools .history-picker {
-            width: 240px;
-            min-width: 0;
-        }
-        .result-tools .history-picker .icon-select-trigger {
-            height: 30px;
-            padding: 0 10px;
-            gap: 6px;
-            border-radius: var(--radius);
-            color: var(--cyan);
-            font-family: var(--font-mono);
-            font-size: 12px;
-            letter-spacing: .5px;
-        }
-        .result-tools .history-picker .icon-select-caret {
-            color: var(--cyan);
-            opacity: .7;
         }
         .col-mode {
             display: inline-block;

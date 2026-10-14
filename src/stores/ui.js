@@ -20,6 +20,7 @@ export const useUiStore = defineStore('ui', () => {
     exportModal: false,
     filterModal: false,
     sqlLogModal: false,
+    resultHistoryModal: false,
     sqlFavModal: false,
     favEditModal: false,
     aiConfigModal: false,
