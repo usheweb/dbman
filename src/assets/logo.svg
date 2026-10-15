@@ -16,26 +16,41 @@
   <!-- 外框：圆角方形 -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
 
-  <!-- 轨道：被 4 个数据库节点打断的断环（4 段弧，缺口 38° / 弧段 52°） -->
-  <path d="M207.8 395.9 A148 148 0 0 1 116.1 304.2" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
-  <path d="M116.1 207.8 A148 148 0 0 1 207.8 116.1" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
-  <path d="M304.2 116.1 A148 148 0 0 1 395.9 207.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
-  <path d="M395.9 304.2 A148 148 0 0 1 304.2 395.9" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+  <!-- 轨道：4 段断环 + 4 个数据库节点，绕中心整体顺时针倾斜 25°；
+       节点各自反旋 -25°，所以图标本身保持正立不歪。
+       下面的「正下 / 正左 / 正上 / 正右」指的是倾斜前的位置。 -->
+  <g transform="rotate(25 256 256)">
 
-  <!-- 正下：圆柱 = 关系型（MySQL / PostgreSQL / Oracle） -->
-  <path d="M231 404 v30 a25 10 0 0 0 50 0 v-30 z" fill="#FFFFFF"/>
-  <ellipse cx="256" cy="404" rx="25" ry="10" fill="#DFEEFB"/>
+    <!-- 断环 4 段弧：被 4 个节点所在的缺口打断（缺口 38° / 弧段 52°） -->
+    <path d="M207.8 395.9 A148 148 0 0 1 116.1 304.2" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M116.1 207.8 A148 148 0 0 1 207.8 116.1" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M304.2 116.1 A148 148 0 0 1 395.9 207.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M395.9 304.2 A148 148 0 0 1 304.2 395.9" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
 
-  <!-- 正左：六边形 = 宽列 / 分布式（Cassandra / HBase） -->
-  <polygon points="108,229 131.4,242.5 131.4,269.5 108,283 84.6,269.5 84.6,242.5" fill="#FFFFFF"/>
+    <!-- 正下：圆柱 = 关系型（MySQL / PostgreSQL / Oracle） -->
+    <g transform="rotate(-25 256 414)">
+      <path d="M231 404 v30 a25 10 0 0 0 50 0 v-30 z" fill="#FFFFFF"/>
+      <ellipse cx="256" cy="404" rx="25" ry="10" fill="#DFEEFB"/>
+    </g>
 
-  <!-- 正上：叶子 = 文档型（MongoDB） -->
-  <path d="M256 80 C282 92 282 124 256 136 C230 124 230 92 256 80 Z" fill="#FFFFFF"/>
+    <!-- 正左：六边形 = 宽列 / 分布式（Cassandra / HBase） -->
+    <g transform="rotate(-25 108 256)">
+      <polygon points="108,229 131.4,242.5 131.4,269.5 108,283 84.6,269.5 84.6,242.5" fill="#FFFFFF"/>
+    </g>
 
-  <!-- 正右：堆叠板 = 键值 / 缓存（Redis / Memcached） -->
-  <rect x="378" y="232.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
-  <rect x="378" y="249.5" width="52" height="13" rx="4" fill="#DFEEFB"/>
-  <rect x="378" y="266.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
+    <!-- 正上：叶子 = 文档型（MongoDB） -->
+    <g transform="rotate(-25 256 108)">
+      <path d="M256 80 C282 92 282 124 256 136 C230 124 230 92 256 80 Z" fill="#FFFFFF"/>
+    </g>
+
+    <!-- 正右：堆叠板 = 键值 / 缓存（Redis / Memcached） -->
+    <g transform="rotate(-25 404 256)">
+      <rect x="378" y="232.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
+      <rect x="378" y="249.5" width="52" height="13" rx="4" fill="#DFEEFB"/>
+      <rect x="378" y="266.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
+    </g>
+
+  </g>
 
   <!-- 品牌机器人：原样完整保留（黑色头部 / 浅蓝双眼 / 两侧耳环 / 浅蓝光晕底盘） -->
   <circle cx="256" cy="256" r="75" fill="#ACE0F9"/>
