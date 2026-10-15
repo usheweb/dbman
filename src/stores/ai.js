@@ -106,20 +106,23 @@ export const useAiStore = defineStore('ai', () => {
   // 钥匙串不可用时置 false：apiKey 退回文件里明文保存，保证功能可用
   let keyringOk = true;
 
-  // 启动引导：apiKey 优先从钥匙串取；旧版本明文存在文件里则搬过去并抹掉原文
+  // 启动引导：文件里的明文 apiKey 优先——写进钥匙串覆盖旧值后把明文抹掉，
+  // 与连接密码的迁移保持一致，避免钥匙串里的旧值盖掉 debug 期新填的 key。
+  // 文件里没有明文时，才取钥匙串里的值
   async function initSecret() {
     const plain = config.value.apiKey || '';
     try {
+      if (plain) {
+        await api.secretSet(AI_SECRET_ACCOUNT, plain);
+        keyringOk = true;
+        writeConfig();
+        return;
+      }
       const stored = await api.secretGet(AI_SECRET_ACCOUNT);
       keyringOk = true;
-      if (stored) {
-        config.value.apiKey = stored;
-        if (plain) writeConfig(); // 文件里还有明文残留，抹掉
-      } else if (plain) {
-        await api.secretSet(AI_SECRET_ACCOUNT, plain);
-        writeConfig();
-      }
+      if (stored) config.value.apiKey = stored;
     } catch (e) {
+      // 钥匙串不可用：明文继续留在文件里
       keyringOk = false;
       config.value.apiKey = plain;
     }
