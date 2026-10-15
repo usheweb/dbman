@@ -20,6 +20,10 @@ export const RELATIONAL = [
 // 本地文件型数据库：无主机/端口，凭文件路径连接
 export const FILE_BASED = ['sqlite'];
 
+// 文档型数据库（MongoDB）：库 → 集合 → 文档，查询语言是 JSON 而非 SQL，
+// 后端走独立的 mongo_cmd 命令集，不套关系型驱动抽象层
+export const MONGO_LIKE = ['mongodb', 'mongo'];
+
 /** 该类型是否按 MySQL 语义处理 */
 export function isMysqlLike(type) {
   return MYSQL_LIKE.includes(type);
@@ -33,4 +37,9 @@ export function isRelational(type) {
 /** 该类型是否为本地文件型（无主机/端口） */
 export function isFileBased(type) {
   return FILE_BASED.includes(type);
+}
+
+/** 该类型是否为文档型（MongoDB：库-集合树 + JSON 查询工作区） */
+export function isMongoLike(type) {
+  return MONGO_LIKE.includes(type);
 }

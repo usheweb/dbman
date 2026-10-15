@@ -6,7 +6,7 @@ import * as api from '@/api';
 import { useStoreStore } from './store';
 import { useUiStore } from './ui';
 import { generateId } from '@/utils/format';
-import { isRelational } from '@/utils/dbType';
+import { isRelational, isMongoLike } from '@/utils/dbType';
 
 // 句柄失效的精确文案，与 Rust 后端保持一致，用于触发静默重连
 const INVALID_CONN = 'Invalid connection';
@@ -202,6 +202,7 @@ export const useConnectionStore = defineStore('connection', () => {
       // 连接成功不再弹提示：左侧库表列表加载出来本身就是成功的信号
       if (isRelational(conn.type)) await loadMySQLDatabasesFor(connId);
       else if (conn.type === 'redis') await loadRedisDatabasesFor(connId);
+      else if (isMongoLike(conn.type)) await loadMongoDatabasesFor(connId);
     } catch (err) {
       ui.showToast('连接失败：' + String(err), 'error');
       // 回滚这个 tab
@@ -284,6 +285,17 @@ export const useConnectionStore = defineStore('connection', () => {
     await selectDatabaseFor(connId, list.includes(want) ? want : '0');
   }
 
+  // MongoDB 的「库」是真实库名：列出来后由左侧集合树按当前库拉集合。
+  // 认证库（config.database）不参与这里的默认选中，只沿用用户上次选过的库
+  async function loadMongoDatabasesFor(connId) {
+    const s = sessions.value[connId];
+    if (!s) return;
+    const data = await withRetryFor(s, id => api.mongoDatabases(id));
+    s.databaseList = data;
+    const last = connectionDatabases.value[connId];
+    if (last && data.includes(last)) await selectDatabaseFor(connId, last);
+  }
+
   async function selectDatabaseFor(connId, db) {
     const s = sessions.value[connId];
     if (!s) return;
@@ -295,6 +307,8 @@ export const useConnectionStore = defineStore('connection', () => {
       await withRetryFor(s, id => api.redisSelectDb(id, Number(db)));
       return;
     }
+    // MongoDB 没有表结构：切库后集合列表由左侧集合树监听 currentDatabase 自行重拉
+    if (isMongoLike(s.connData.type)) return;
     // 选中库后不再自动收起连接列，避免页面跳动突兀；是否隐藏交给用户点面板上的收起按钮
     await loadTablesFor(connId, db);
   }

@@ -254,3 +254,18 @@ pub struct RedisValue {
     pub value: serde_json::Value,
     pub ttl: i64,
 }
+
+/// MongoDB 集合（文档型数据库没有列定义，集合即关系型里的「表」）
+#[derive(Debug, Serialize)]
+pub struct MongoCollection {
+    pub name: String,
+}
+
+/// MongoDB 索引定义
+#[derive(Debug, Serialize)]
+pub struct MongoIndex {
+    pub name: String,
+    /// 键定义，原始 JSON 文本（如 {"_id":1}）
+    pub keys: String,
+    pub unique: bool,
+}

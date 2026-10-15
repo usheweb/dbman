@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from 'vue';
 import { useConnectionStore } from '@/stores/connection';
-import { isRelational, isFileBased } from '@/utils/dbType';
+import { isRelational, isFileBased, isMongoLike } from '@/utils/dbType';
 import TableTree from '@/components/database/TableTree.vue';
 import RedisTree from '@/components/database/RedisTree.vue';
+import MongoTree from '@/components/database/MongoTree.vue';
 import RedisDetail from '@/components/redis/RedisDetail.vue';
+import MongoWorkspace from '@/components/mongo/MongoWorkspace.vue';
 import SqlWorkspace from '@/components/workspace/SqlWorkspace.vue';
 
 const connStore = useConnectionStore();
@@ -26,6 +28,10 @@ const connectingTarget = computed(() => {
     <template v-else-if="isRelational(connStore.currentConnData.type)">
       <TableTree />
       <SqlWorkspace />
+    </template>
+    <template v-else-if="isMongoLike(connStore.currentConnData.type)">
+      <MongoTree />
+      <MongoWorkspace />
     </template>
     <template v-else>
       <RedisTree />

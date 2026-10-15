@@ -2,6 +2,7 @@ mod csv_import;
 mod db;
 mod llm;
 mod models;
+mod mongo_cmd;
 mod redis_cmd;
 mod ssh;
 mod state;
@@ -57,7 +58,8 @@ fn generate_id() -> String {
 async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<String, String> {
     let db_type = payload.r#type.clone();
     let is_redis = db_type == "redis";
-    if !is_redis && !db::is_relational(&db_type) {
+    let is_mongo = db_type == "mongodb" || db_type == "mongo";
+    if !is_redis && !is_mongo && !db::is_relational(&db_type) {
         return Err("Unsupported database type".to_string());
     }
 
@@ -91,7 +93,21 @@ async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<
         port = local_port;
     }
 
-    let connect_result = if !is_redis {
+    let connect_result = if is_mongo {
+        match timeout(
+            CONNECT_TIMEOUT,
+            mongo_cmd::connect(&payload.config, &host, port),
+        )
+        .await
+        {
+            Ok(Ok(client)) => {
+                state.insert(conn_id.clone(), DbConn::Mongo(client)).await;
+                Ok(())
+            }
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(connect_timeout_error(&target_host, target_port)),
+        }
+    } else if !is_redis {
         match timeout(
             CONNECT_TIMEOUT,
             db::connect_driver(&db_type, &payload.config, &host, port),
@@ -193,6 +209,11 @@ pub fn run() {
             redis_cmd::redis_databases,
             redis_cmd::redis_set_ttl,
             redis_cmd::redis_set_value,
+            mongo_cmd::mongo_databases,
+            mongo_cmd::mongo_collections,
+            mongo_cmd::mongo_query,
+            mongo_cmd::mongo_indexes,
+            mongo_cmd::mongo_export,
             llm::ai_generate_sql,
             llm::ai_test_config,
             store::store_load,

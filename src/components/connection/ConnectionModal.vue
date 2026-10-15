@@ -2,7 +2,7 @@
 import { reactive, watch } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
-import { isRelational, isFileBased } from '@/utils/dbType';
+import { isRelational, isFileBased, isMongoLike } from '@/utils/dbType';
 import * as api from '@/api';
 import IconSelect from '@/components/common/IconSelect.vue';
 
@@ -17,18 +17,20 @@ const DB_TYPES = [
   { value: 'sqlite', label: 'SQLite', icon: 'sqlite' },
   { value: 'sqlserver', label: 'SQL Server', icon: 'sqlserver' },
   { value: 'oracle', label: 'Oracle', icon: 'oracle' },
-  { value: 'redis', label: 'Redis', icon: 'redis' }
+  { value: 'redis', label: 'Redis', icon: 'redis' },
+  { value: 'mongodb', label: 'MongoDB', icon: 'mongodb' }
 ];
 
 // 各类型的默认端口：MySQL / MariaDB 3306，PostgreSQL 5432，
-// SQL Server 1433，Oracle 1521，Redis 6379
+// SQL Server 1433，Oracle 1521，Redis 6379，MongoDB 27017
 const DEFAULT_PORTS = {
   mysql: 3306,
   mariadb: 3306,
   postgres: 5432,
   sqlserver: 1433,
   oracle: 1521,
-  redis: 6379
+  redis: 6379,
+  mongodb: 27017
 };
 
 // 需要用户名/密码认证的关系型库（SQLite 为本地文件，无认证）
@@ -36,10 +38,16 @@ function needsAuth(type) {
   return isRelational(type) && !isFileBased(type);
 }
 
-// 「数据库」字段的标签随类型变化：SQLite 填文件路径，Oracle 填服务名
+// MongoDB 的 config.database 传的是「认证库」（authSource），与关系型的「数据库」同字段
+function hasDbField(type) {
+  return isRelational(type) || isMongoLike(type);
+}
+
+// 「数据库」字段的标签随类型变化：SQLite 填文件路径，Oracle 填服务名，MongoDB 填认证库
 function dbFieldLabel(type) {
   if (isFileBased(type)) return '数据库文件';
   if (type === 'oracle') return '服务名(Service Name)';
+  if (isMongoLike(type)) return '认证库(Auth Source)';
   return '数据库';
 }
 
@@ -117,6 +125,7 @@ function buildSsh() {
 }
 
 // 与 getConnectionConfig 完全一致：关系型用 database，redis 用 db
+// （MongoDB 的 database 表示认证库，与关系型同字段）
 function buildPayload() {
   const config = {
     host: form.host,
@@ -124,7 +133,7 @@ function buildPayload() {
     user: form.user,
     password: form.password
   };
-  if (isRelational(form.type)) config.database = form.database;
+  if (hasDbField(form.type)) config.database = form.database;
   else config.db = Number(form.db);
   return {
     type: form.type,
@@ -224,11 +233,11 @@ function onSave() {
             <input type="password" v-model="form.password">
           </div>
         </div>
-        <div class="form-group" v-show="isRelational(form.type)">
+        <div class="form-group" v-show="hasDbField(form.type)">
           <label>{{ dbFieldLabel(form.type) }}</label>
           <div style="display: flex; gap: 8px;">
             <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" v-model="form.database"
-              :placeholder="isFileBased(form.type) ? '点击右侧选择 .db / .sqlite 文件，或直接填写路径' : '可选'" style="flex: 1;">
+              :placeholder="isFileBased(form.type) ? '点击右侧选择 .db / .sqlite 文件，或直接填写路径' : (isMongoLike(form.type) ? '留空默认 admin' : '可选')" style="flex: 1;">
             <button v-if="isFileBased(form.type)" type="button" class="btn btn-secondary" @click="pickSqliteFile">浏览…</button>
           </div>
         </div>

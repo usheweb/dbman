@@ -119,6 +119,7 @@ pub fn is_file_based(db_type: &str) -> bool {
 pub fn default_port(db_type: &str) -> u16 {
     match db_type {
         "redis" => 6379,
+        "mongodb" | "mongo" => 27017,
         "postgres" | "postgresql" => 5432,
         "sqlserver" | "mssql" => 1433,
         "oracle" => 1521,

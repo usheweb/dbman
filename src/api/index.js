@@ -88,6 +88,30 @@ export function redisSetValue(connId, key, value) {
   return invoke('redis_set_value', { connId, key, value });
 }
 
+// ===== MongoDB（文档型：库 → 集合 → 文档）=====
+// spec 是一段 JSON 查询描述（与关系型的 SQL 文本位置同构），形如
+// {"mode":"find","collection":"users","filter":{},"sort":{"_id":1}} 或
+// {"mode":"aggregate","collection":"users","pipeline":[...]}
+export function mongoDatabases(connId) {
+  return invoke('mongo_databases', { connId });
+}
+
+export function mongoCollections(connId, database) {
+  return invoke('mongo_collections', { connId, database });
+}
+
+export function mongoQuery(connId, database, spec, limit, skip) {
+  return invoke('mongo_query', { connId, database, spec, limit, skip });
+}
+
+export function mongoIndexes(connId, database, collection) {
+  return invoke('mongo_indexes', { connId, database, collection });
+}
+
+export function mongoExport(connId, database, spec, headers, columns, path) {
+  return invoke('mongo_export', { connId, database, spec, headers, columns, path });
+}
+
 // ===== AI：大模型生成 SQL =====
 // config: { baseUrl, apiKey, model, timeoutSecs?, maxRounds? }
 // continueSession: true 时在上一次的会话上下文基础上继续（追问式微调）

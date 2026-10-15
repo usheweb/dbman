@@ -46,6 +46,9 @@ rusqlite = { version = "0.40", default-features = false, features = ["bundled"] 
 tiberius = { version = "0.12", default-features = false, features = ["rustls", "tds73", "chrono"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 oracle = { version = "0.6", default-features = false, features = ["chrono"] }
+# MongoDB：官方驱动，bson 由它转出；rustls 避免引入 OpenSSL 系统库。
+# 锁在 3.2.x：更高的 3.9.x 在本机工具链下编译失败（crate 自身报错），且 3.2 已是 MSRV 许可内的最高版
+mongodb = { version = "~3.2", default-features = false, features = ["rustls-tls", "compat-3-0-0"] }
 
 [profile.release]
 codegen-units = 1

@@ -9,10 +9,12 @@ use crate::db::RelationalDriver;
 use crate::ssh::Tunnel;
 
 /// 已建立的数据库连接。关系型库统一以 `Arc<dyn RelationalDriver>` 存储，
-/// 驱动内部自行持有并加锁连接；Redis 的 ConnectionManager 本身廉价可 Clone，直接存。
+/// 驱动内部自行持有并加锁连接；Redis 的 ConnectionManager 与 MongoDB 的
+/// Client 本身都廉价可 Clone（内部连接池），直接存。
 pub enum DbConn {
     Relational(Arc<dyn RelationalDriver>),
     Redis(redis::aio::ConnectionManager),
+    Mongo(mongodb::Client),
 }
 
 /// AI 生成会话：保留上一次生成的完整 messages，支持「继续微调」在其基础上追加。
@@ -61,6 +63,14 @@ impl AppState {
         let map = self.connections.lock().await;
         match map.get(conn_id) {
             Some(DbConn::Redis(c)) => Ok(c.clone()),
+            _ => Err("Invalid connection".to_string()),
+        }
+    }
+
+    pub async fn get_mongo(&self, conn_id: &str) -> Result<mongodb::Client, String> {
+        let map = self.connections.lock().await;
+        match map.get(conn_id) {
+            Some(DbConn::Mongo(c)) => Ok(c.clone()),
             _ => Err("Invalid connection".to_string()),
         }
     }

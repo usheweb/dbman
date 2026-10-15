@@ -56,6 +56,22 @@ const ICONS = {
     '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     + '<ellipse cx="8" cy="8" rx="5.6" ry="3.3"/>'
     + '</svg>',
+  // MongoDB：叠放的两页文档（文档型存储，区别于关系型的圆柱/网格）
+  mongodb:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M4.2 5.4V2.6h5.1l2.5 2.5v5.1H6.8"/>'
+    + '<path d="M9.3 2.6v2.5h2.5"/>'
+    + '<rect x="2.2" y="6.6" width="7.6" height="6.8" rx="1.2"/>'
+    + '<path d="M4.2 9.2h3.6"/>'
+    + '<path d="M4.2 11.2h2.4"/>'
+    + '</svg>',
+  // 集合：一叠文档（Mongo 左侧树里的集合节点）
+  collection:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<rect x="3.6" y="2.4" width="8.8" height="7" rx="1.1"/>'
+    + '<path d="M2.4 5.6v5.5a1.1 1.1 0 0 0 1.1 1.1h7.3"/>'
+    + '<path d="M6 5.2h4M6 7.2h2.6"/>'
+    + '</svg>',
   // Redis：钥匙（键值存储）
   redis:
     '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'

@@ -5,6 +5,7 @@ import * as api from '@/api';
 import { useStoreStore } from './store';
 import { useUiStore } from './ui';
 import { useConnectionStore } from './connection';
+import { isMongoLike } from '@/utils/dbType';
 import {
   rawText, formatValue, formatDateTime, isTimestampValue, generateId,
   parseEnumFromComment, stripEnumFromComment, csvCell, exportFilename
@@ -514,8 +515,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const matchCount = computed(() => matchCells.value.length);
 
   // ===== 查询执行 =====
+  // 当前连接是否为文档型（MongoDB）：查询描述是 JSON 而非 SQL，危险语句检测 /
+  // 标识符纠错 / 单元格编辑这些 SQL 语义的能力都要跳过
+  function isMongoConn() {
+    return isMongoLike(conn.currentConnData && conn.currentConnData.type);
+  }
+
   // 分页时多取一行，用来判断是否还有下一页（不用额外查 COUNT）
+  // 入参 sql 对 MongoDB 是 JSON 查询描述，对关系型是 SQL 文本——两者位置同构
   async function fetchRows(sql, page) {
+    if (isMongoConn()) {
+      return conn.withRetry(id => api.mongoQuery(
+        id, conn.currentDatabase, sql, pageSize.value + 1, (page - 1) * pageSize.value
+      ));
+    }
     return conn.withRetry(id => api.dbQuery(
       id, sql, conn.currentDatabase, pageSize.value + 1, (page - 1) * pageSize.value
     ));
@@ -568,8 +581,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const connId = conn.currentConnId;
     const db = conn.currentDatabase;
     const connData = conn.currentConnData;
-    // 会改动数据 / 结构 / 权限或实例状态的语句，执行前必须二次确认
-    if (!confirmed) {
+    // 会改动数据 / 结构 / 权限或实例状态的语句，执行前必须二次确认。
+    // MongoDB 的查询描述是 JSON、只读，不做 SQL 语义的危险语句识别
+    if (!confirmed && !isMongoConn()) {
       const kinds = detectDangerousStatements(sql);
       if (kinds.length && !(await askExecConfirm(kinds, sql))) return false;
       if (tabId !== liveTabId) return false; // 确认期间切走了 Tab，放弃这次执行
@@ -601,8 +615,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return true;
     } catch (err) {
       const msg = err.message;
-      // 表名 / 字段名写错：解析报错文案，给出相似名称让用户挑选，替换后写回编辑器并重跑（只重试一次）
-      if (!retried) {
+      // 表名 / 字段名写错：解析报错文案，给出相似名称让用户挑选，替换后写回编辑器并重跑（只重试一次）。
+      // MongoDB 的标识符（库/集合/字段）不在 SQL 编辑器里，不走这套纠错
+      if (!retried && !isMongoConn()) {
         const hit = await tryFixIdentifiers(msg, sql);
         if (hit) {
           writeBackFix(tabId, hit, sql);
@@ -910,15 +925,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     });
     if (!path) return;
     try {
-      await api.dbExport(
-        conn.serverConnId, lastSql.value, conn.currentDatabase,
-        buildExportHeaders(cols),
-        cols.map(col => {
-          const info = colInfo[col] || {};
-          return { name: col, mode: effectiveColumnMode(col, info), enumMap: info.enumMap || null };
-        }),
-        path
-      );
+      const headers = buildExportHeaders(cols);
+      const exportCols = cols.map(col => {
+        const info = colInfo[col] || {};
+        return { name: col, mode: effectiveColumnMode(col, info), enumMap: info.enumMap || null };
+      });
+      if (isMongoConn()) {
+        await api.mongoExport(
+          conn.serverConnId, conn.currentDatabase, lastSql.value, headers, exportCols, path
+        );
+      } else {
+        await api.dbExport(
+          conn.serverConnId, lastSql.value, conn.currentDatabase, headers, exportCols, path
+        );
+      }
       ui.showToast('已开始导出全部数据，请稍候…', 'success');
     } catch (err) {
       ui.showToast(String(err), 'error');
@@ -976,6 +996,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 结果单元格是否可改：查看历史结果时条目已定型，认不出表名时无法生成 UPDATE
   function canEditCell() {
     if (historyView.value) return '正在查看历史结果，请先切回「最新结果」再修改';
+    if (isMongoConn()) return 'MongoDB 暂不支持直接在结果表里修改文档';
     if (!resultTableRef()) return '无法识别结果对应的数据表（SQL 中缺少 FROM 表名），不能修改';
     return '';
   }
