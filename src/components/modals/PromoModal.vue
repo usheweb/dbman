@@ -2,17 +2,21 @@
 import { ref, watch, onUnmounted } from 'vue';
 import promoImg from '@/assets/tslclock.png';
 import { useStoreStore } from '@/stores/store';
-import { todayKey } from '@/utils/format';
+import { dayKeyAfter } from '@/utils/format';
 
-// 启动推广弹窗：每次打开应用都弹一次，倒计时结束后才允许关闭
+// 跳过时长：勾选后 7 天内不再弹出，到期后（若仍勾着）再弹一次，等效「每周一次」
+const SKIP_DAYS = 7;
+
+// 启动推广弹窗：默认每周弹一次，倒计时结束后才允许关闭
 const props = defineProps({
   visible: { type: Boolean, default: false }
 });
 const emit = defineEmits(['close']);
 
 const store = useStoreStore();
-// 「今日不再提示」：默认不勾选，勾选后关闭时记录当天日期，次日恢复弹出
-const skipToday = ref(false);
+// 「7 天内不再提示」：勾选偏好持久化，用户勾过一次以后每次打开都保持勾选，
+// 于是自动变成「每周只弹一次」；主动取消勾选则恢复每次启动都弹
+const skipWeek = ref(false);
 
 const COUNTDOWN_SECONDS = 3;
 const remain = ref(COUNTDOWN_SECONDS);
@@ -54,8 +58,8 @@ watch(() => props.visible, (visible) => {
     endTime = 0;
     return;
   }
-  // 每次弹出都重置勾选状态
-  skipToday.value = false;
+  // 沿用上次的勾选偏好：勾过就一直勾上（也就是持续每周一次）
+  skipWeek.value = store.get('dbman_promo_skip_enabled') === '1';
   startTimer();
 });
 
@@ -70,9 +74,11 @@ onUnmounted(() => {
 
 async function close() {
   if (remain.value > 0) return;
-  // 勾了「今日不再提示」就记下今天，启动时据此跳过弹窗，到第二天自然恢复。
-  // 这里等写盘完成再关闭，避免用户紧接着刷新时磁盘上还没有这个键
-  if (skipToday.value) await store.set('dbman_promo_skip_date', todayKey());
+  // 勾选状态持久化：勾了就记下「到期日 = 今天 + 7 天」，启动时据此跳过弹窗；
+  // 到下一周过期时再弹一次，因为仍然勾着，关闭后又顺延一周 —— 即每周一次。
+  // 这里等写盘完成再关闭，避免用户紧接着重启时磁盘上还没有这些键
+  await store.set('dbman_promo_skip_enabled', skipWeek.value ? '1' : '0');
+  if (skipWeek.value) await store.set('dbman_promo_skip_until', dayKeyAfter(SKIP_DAYS));
   emit('close');
 }
 </script>
@@ -81,15 +87,17 @@ async function close() {
   <!-- 鼠标移回窗口时再兜底重算一次，防止系统未派发 focus/visibilitychange -->
   <div class="modal" :class="{ hidden: !visible }" @pointerenter="sync">
     <div class="modal-content promo-content">
-      <img class="promo-img" :src="promoImg" alt="唐三浪学习时钟">
-      <div class="promo-actions">
-        <label class="promo-skip">
-          <input type="checkbox" v-model="skipToday">
-          <span>今日不再提示</span>
-        </label>
-        <button class="btn promo-btn" :disabled="remain > 0" @click="close">
-          {{ remain > 0 ? `${remain} 秒后可关闭` : '关闭' }}
-        </button>
+      <div class="modal-scroll">
+        <img class="promo-img" :src="promoImg" alt="唐三浪学习时钟">
+        <div class="promo-actions">
+          <label class="promo-skip">
+            <input type="checkbox" v-model="skipWeek">
+            <span>7 天内不再提示</span>
+          </label>
+          <button class="btn promo-btn" :disabled="remain > 0" @click="close">
+            {{ remain > 0 ? `${remain} 秒后可关闭` : '关闭' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -98,6 +106,9 @@ async function close() {
 <style scoped>
 .promo-content {
   width: 640px;
+}
+
+.promo-content .modal-scroll {
   padding: 18px;
 }
 

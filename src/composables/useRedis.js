@@ -10,9 +10,6 @@ const globalSearch = ref(true);   // true=在全部 key 中搜索（服务端 SC
 const selectedKey = ref(null);
 const info = ref('');
 const dbsize = ref(0);
-// 当前选中的库序号与库总数（Redis 默认 16 个逻辑库）
-const dbIndex = ref(0);
-const dbCount = ref(16);
 // key 列表分页：SCAN 游标式，cursor 是当前页的出发游标
 const keyTotal = ref(0);
 const pageIndex = ref(1);
@@ -49,7 +46,7 @@ function serverPattern() {
 
 export function useRedis() {
   return {
-    keys, keyword, globalSearch, selectedKey, info, dbsize, dbIndex, dbCount,
+    keys, keyword, globalSearch, selectedKey, info, dbsize,
     keyTotal, pageIndex, hasPrev, hasNext
   };
 }
@@ -61,8 +58,6 @@ export function resetRedis() {
   selectedKey.value = null;
   info.value = '';
   dbsize.value = 0;
-  dbIndex.value = 0;
-  dbCount.value = 16;
   keyTotal.value = 0;
   pageIndex.value = 1;
   cursor.value = 0;
@@ -114,18 +109,3 @@ export async function redisKeysPrevPage(connStore) {
   pageIndex.value = back === 0 ? 1 : pageIndex.value - 1;
 }
 
-// 库总数：拿不到（托管实例禁用 CONFIG）时沿用默认 16
-export async function loadRedisDatabases(connStore) {
-  try {
-    const n = await connStore.withRetry(id => api.redisDatabases(id));
-    if (n > 0) dbCount.value = n;
-  } catch (e) {
-    dbCount.value = 16;
-  }
-}
-
-// 切换到指定库：后端在该连接上执行 SELECT
-export async function selectRedisDb(connStore, db) {
-  await connStore.withRetry(id => api.redisSelectDb(id, db));
-  dbIndex.value = db;
-}

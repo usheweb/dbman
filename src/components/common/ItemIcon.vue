@@ -24,6 +24,38 @@ const ICONS = {
     + '<path d="M2.6 6.5c0 1.16 2.42 2.1 5.4 2.1s5.4-.94 5.4-2.1"/>'
     + '<path d="M2.6 9.4c0 1.16 2.42 2.1 5.4 2.1s5.4-.94 5.4-2.1"/>'
     + '</svg>',
+  // MariaDB：与 MySQL 同族（关系型圆柱），中间用波浪线而非分段直线区分
+  // （吉祥物为海豹，取“海”的意象；不复制 MySQL 的分段圆柱，避免二者难以辨认）
+  mariadb:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<ellipse cx="8" cy="3.6" rx="5.4" ry="2.1"/>'
+    + '<path d="M2.6 3.6v8.8c0 1.16 2.42 2.1 5.4 2.1s5.4-.94 5.4-2.1V3.6"/>'
+    + '<path d="M4.1 8.5c1.2-1.7 2.4-1.7 3.6 0s2.4 1.7 3.6 0"/>'
+    + '</svg>',
+  // PostgreSQL：分层堆叠（对象/关系型）
+  postgres:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<rect x="3" y="3" width="10" height="4.2" rx="2.1"/>'
+    + '<rect x="3" y="8.8" width="10" height="4.2" rx="2.1"/>'
+    + '</svg>',
+  // SQLite：羽毛（本地嵌入式文件库）
+  sqlite:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M12.6 3.4C9.2 3.6 6.8 5.4 5.7 8.2c-.5 1.3-.8 2.4-.8 2.4s1.2-.4 2.4-.9"/>'
+    + '<path d="M12.6 3.4 4.9 12.6"/>'
+    + '</svg>',
+  // SQL Server：二维网格（表格/服务器）
+  sqlserver:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="1.6"/>'
+    + '<path d="M8 2.6v10.8"/>'
+    + '<path d="M2.6 8h10.8"/>'
+    + '</svg>',
+  // Oracle：椭圆（品牌标志性环形）
+  oracle:
+    '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<ellipse cx="8" cy="8" rx="5.6" ry="3.3"/>'
+    + '</svg>',
   // Redis：钥匙（键值存储）
   redis:
     '<svg class="item-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'

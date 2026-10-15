@@ -30,6 +30,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       <span>{{ ws.lastResult ? ws.lastResult.data.length + ' 行' : '' }}</span>
       <div class="result-tools">
         <button
+          class="icon-btn"
+          :disabled="!ws.lastSql || ws.busy"
+          title="刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）"
+          @click="ws.refreshResult()"
+        >
+          <svg :class="{ 'icon-spin': ws.busy }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+            <path d="M21 3.5V9h-5.5" />
+          </svg>
+          <span class="btn-label">刷新</span>
+        </button>
+        <button
           v-if="ws.hasPendingEdits"
           class="icon-btn"
           :title="'放弃当前 ' + ws.pendingEditCount + ' 个未保存的单元格修改'"
@@ -98,9 +110,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           @click="ui.openModal('resultHistoryModal')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
-            <path d="M3.5 4.5V9H8" />
-            <path d="M12 7.5V12l3 1.8" />
+            <rect x="3.5" y="4.5" width="17" height="4.5" rx="1" />
+            <path d="M5.5 9v9A1.5 1.5 0 0 0 7 19.5h10a1.5 1.5 0 0 0 1.5-1.5V9" />
+            <path d="M10 13.5h4" />
           </svg>
           <span class="btn-label">历史结果 ({{ ws.historyList.length }})</span>
         </button>

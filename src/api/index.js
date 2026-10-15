@@ -12,25 +12,25 @@ export function disconnect(connId) {
   return invoke('disconnect', { connId });
 }
 
-// ===== MySQL =====
-export function mysqlDatabases(connId) {
-  return invoke('mysql_databases', { connId });
+// ===== 关系型数据库（MySQL / 后续 PostgreSQL、SQLite 等通用命令）=====
+export function dbDatabases(connId) {
+  return invoke('db_databases', { connId });
 }
 
-export function mysqlTables(connId, database, filter) {
-  return invoke('mysql_tables', { connId, database, filter: filter || null });
+export function dbTables(connId, database, filter) {
+  return invoke('db_tables', { connId, database, filter: filter || null });
 }
 
-export function mysqlColumns(connId, database, table) {
-  return invoke('mysql_columns', { connId, database, table });
+export function dbColumns(connId, database, table) {
+  return invoke('db_columns', { connId, database, table });
 }
 
-export function mysqlQuery(connId, sql, database, limit, offset) {
-  return invoke('mysql_query', { connId, sql, database: database || null, limit, offset });
+export function dbQuery(connId, sql, database, limit, offset) {
+  return invoke('db_query', { connId, sql, database: database || null, limit, offset });
 }
 
-export function mysqlExport(connId, sql, database, headers, columns, path) {
-  return invoke('mysql_export', {
+export function dbExport(connId, sql, database, headers, columns, path) {
+  return invoke('db_export', {
     connId,
     sql,
     database: database || null,
@@ -41,21 +41,21 @@ export function mysqlExport(connId, sql, database, headers, columns, path) {
 }
 
 // 表结构 / DDL
-export function mysqlTableDdl(connId, database, table) {
-  return invoke('mysql_table_ddl', { connId, database, table });
+export function dbTableDdl(connId, database, table) {
+  return invoke('db_table_ddl', { connId, database, table });
 }
 
-export function mysqlTableStructure(connId, database, table) {
-  return invoke('mysql_table_structure', { connId, database, table });
+export function dbTableStructure(connId, database, table) {
+  return invoke('db_table_structure', { connId, database, table });
 }
 
-export function mysqlExportDataSql(connId, database, table, path, withDrop, withCreate, batchSize) {
-  return invoke('mysql_export_data_sql', { connId, database, table, path, withDrop, withCreate, batchSize });
+export function dbExportDataSql(connId, database, table, path, withDrop, withCreate, batchSize) {
+  return invoke('db_export_data_sql', { connId, database, table, path, withDrop, withCreate, batchSize });
 }
 
-// 执行（可手改的）DDL 脚本，支持多条语句
-export function mysqlExecDdl(connId, database, sql) {
-  return invoke('mysql_exec_ddl', { connId, database, sql });
+// 执行（可手改的）DDL / SQL 脚本，支持多条语句
+export function dbExecScript(connId, database, sql) {
+  return invoke('db_exec_script', { connId, database, sql });
 }
 
 // ===== Redis =====
@@ -131,8 +131,8 @@ export function csvPreview(path, encoding, delimiter, hasHeader, limit) {
 }
 
 // mapping：数组下标对应 CSV 列序，值为目标字段名（null 表示该列不导入）
-export function mysqlImportCsv(connId, database, table, path, mapping, options) {
-  return invoke('mysql_import_csv', { connId, database, table, path, mapping, options });
+export function dbImportCsv(connId, database, table, path, mapping, options) {
+  return invoke('db_import_csv', { connId, database, table, path, mapping, options });
 }
 
 // 文件对话框（导出 CSV 用 save，选择 SQL/CSV 文件用 open）

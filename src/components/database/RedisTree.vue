@@ -4,7 +4,6 @@ import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import {
   useRedis, loadRedisInfo, loadRedisKeys, resetRedis,
-  loadRedisDatabases, selectRedisDb,
   redisKeysNextPage, redisKeysPrevPage, toGlob, globMatch
 } from '@/composables/useRedis';
 import ItemIcon from '@/components/common/ItemIcon.vue';
@@ -12,7 +11,7 @@ import IconSelect from '@/components/common/IconSelect.vue';
 
 const ui = useUiStore();
 const connStore = useConnectionStore();
-const { keys, keyword, globalSearch, selectedKey, dbIndex, dbCount, keyTotal, pageIndex, hasPrev, hasNext } = useRedis();
+const { keys, keyword, globalSearch, selectedKey, keyTotal, pageIndex, hasPrev, hasNext } = useRedis();
 
 // 「本页」模式只过滤已经取回的这一页，零请求；「全库」模式把关键词交给服务端 SCAN 匹配
 const visibleKeys = computed(() => {
@@ -38,10 +37,10 @@ const emptyText = computed(() => {
   return '没有匹配的 key';
 });
 
-// 逻辑库下拉：0 ~ (dbCount-1)
-const dbOptions = computed(() => Array.from({ length: dbCount.value }, (_, i) => ({
-  value: String(i),
-  label: 'DB ' + i
+// 逻辑库下拉：与左侧连接卡片里的库列表同源（connection store 的 databaseList）
+const dbOptions = computed(() => connStore.currentDatabaseList.map(db => ({
+  value: db,
+  label: 'DB ' + db
 })));
 
 // Redis 类型 → 图标名；未知类型回退到钥匙图形
@@ -74,28 +73,22 @@ async function loadAll() {
   }
 }
 
-watch([() => connStore.currentConnId, () => connStore.isConnected], async ([, ok]) => {
-  // 换连接先把上一条的 key / 选中项清掉
-  resetRedis();
-  if (!ok) return;
-  // 连接本身就是按配置里的 db 建立的，这里只同步显示与库总数
-  dbIndex.value = Number(connStore.currentConnData.db) || 0;
-  await loadRedisDatabases(connStore);
-  await loadAll();
-}, { immediate: true });
-
-// 切换逻辑库：后端 SELECT 成功后重新拉 info 与 key 列表
-async function onDbChange(value) {
-  const db = Number(value);
-  if (db === dbIndex.value) return;
-  try {
-    await selectRedisDb(connStore, db);
+// 换连接清空上一条的 key / 选中项；换库只重拉列表。
+// 建连时 isConnected 与 currentDatabase 会先后各触发一次，用 cid#db 去重避免重复请求
+let loadedKey = '';
+watch(
+  [() => connStore.currentConnId, () => connStore.isConnected, () => connStore.currentDatabase],
+  async ([cid, ok, db], [prevCid]) => {
+    if (cid !== prevCid) { resetRedis(); loadedKey = ''; }
+    if (!ok || !db) return;
+    const k = cid + '#' + db;
+    if (k === loadedKey) return;
+    loadedKey = k;
     selectedKey.value = null;
     await loadAll();
-  } catch (err) {
-    ui.showToast(String(err), 'error');
-  }
-}
+  },
+  { immediate: true, flush: 'post' }
+);
 
 // ===== 关键词筛选 =====
 // 搜索输入：本页模式纯前端过滤（零请求），全库模式 300ms 防抖后交给服务端 SCAN
@@ -153,9 +146,9 @@ async function onNextPage() {
       <IconSelect
         class="db-picker"
         title="切换逻辑库"
-        :model-value="String(dbIndex)"
+        :model-value="connStore.currentDatabase"
         :options="dbOptions"
-        @update:model-value="onDbChange"
+        @update:model-value="connStore.selectDatabase"
       />
     </div>
     <div class="tree-filter-row">

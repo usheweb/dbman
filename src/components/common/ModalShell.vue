@@ -10,11 +10,13 @@ defineEmits(['close']);
 <template>
   <div class="modal" :class="{ hidden: !visible }">
     <div class="modal-content" :style="{ width }">
-      <div class="modal-header">
-        <h3><slot name="title" /></h3>
-        <button class="close-btn" @click="$emit('close')">&times;</button>
+      <div class="modal-scroll">
+        <div class="modal-header">
+          <h3><slot name="title" /></h3>
+          <button class="close-btn" @click="$emit('close')">&times;</button>
+        </div>
+        <slot />
       </div>
-      <slot />
     </div>
   </div>
 </template>

@@ -280,11 +280,16 @@ function headerItems() {
   return items;
 }
 
+// 选中的列里存在 NOT NULL 字段时，「设置为 NULL」提交必然失败，置灰该项
+function nullDisabled() {
+  return columns.value.some(col => selColSet.value.has(col) && ws.columnNullable(col) === false);
+}
+
 // 行号列菜单：没有具体的单元格值，去掉「复制」这一项
 function rowHeadItems() {
   return [
     { label: '设置为空白字符串', value: 'set-empty' },
-    { label: '设置为 NULL', value: 'set-null' },
+    { label: '设置为 NULL', value: 'set-null', disabled: nullDisabled() },
     { separator: true },
     { label: '复制为表格数据（Tab 分隔）', value: 'copy-tsv' },
     { label: '复制为 Insert 语句', value: 'copy-insert' },
@@ -301,7 +306,7 @@ function cellItems() {
     { label: '编辑内容…', value: 'edit' },
     { separator: true },
     { label: '设置为空白字符串', value: 'set-empty' },
-    { label: '设置为 NULL', value: 'set-null' },
+    { label: '设置为 NULL', value: 'set-null', disabled: nullDisabled() },
     { separator: true },
     { label: '复制为表格数据（Tab 分隔）', value: 'copy-tsv' },
     { label: '复制为 Insert 语句', value: 'copy-insert' },
@@ -396,9 +401,16 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
     <div v-if="ws.pageInfo.error" style="color:var(--magenta);font-family:var(--font-mono);">错误: {{ ws.pageInfo.error }}</div>
     <div v-else-if="ws.pageInfo.write" style="color:var(--green);font-family:var(--font-mono);">执行成功，影响 {{ ws.pageInfo.rows }} 行</div>
     <div v-else-if="ws.pageInfo.idle"></div>
-    <div v-else-if="ws.lastResult && !ws.lastResult.data.length" style="color:var(--text-dim);">查询结果为空</div>
+    <div v-else-if="ws.lastResult && !ws.lastResult.data.length && !columns.length" class="result-empty">
+      <svg class="result-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4.5" width="18" height="15" rx="2"/>
+        <path d="M3 9.5h18"/>
+        <path d="M9 9.5v10"/>
+      </svg>
+      <div class="result-empty-text">查询结果为空</div>
+    </div>
     <div v-else-if="noVisibleRows" style="color:var(--text-dim);font-family:var(--font-cjk);letter-spacing:1px;">当前页没有包含「{{ ws.findState.keyword }}」的行</div>
-    <table v-else-if="ws.lastResult" class="data-table" :class="{ dragging }">
+    <table v-else-if="ws.lastResult && columns.length" class="data-table" :class="{ dragging }">
       <thead>
         <tr>
           <th class="row-head" title="点击选择整行；Shift 连选；⌘/Ctrl 增减"></th>
@@ -427,7 +439,22 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody v-if="!ws.lastResult.data.length">
+        <!-- 0 行：表头照常显示，下面给一行空结果提示，字段名不丢 -->
+        <tr>
+          <td class="empty-cell" :colspan="columns.length + 1">
+            <div class="result-empty result-empty-compact">
+              <svg class="result-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4.5" width="18" height="15" rx="2"/>
+                <path d="M3 9.5h18"/>
+                <path d="M9 9.5v10"/>
+              </svg>
+              <div class="result-empty-text">查询结果为空</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+      <tbody v-else>
         <tr v-for="r in ws.visibleRowIndexes" :key="r">
           <td
             class="row-head"
@@ -450,7 +477,10 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             @click="onClickCell($event, r, c)"
             @dblclick="startEdit(r, c)"
             @contextmenu.prevent="showCellMenu($event, r, c, rawText(ws.lastResult.data[r][col]))"
-          ><input
+          ><span
+            class="cell-view"
+            :class="{ 'cell-view-hidden': editing && editing.r === r && editing.c === c }"
+          >{{ cellText(ws.lastResult.data[r], col, r, c) }}</span><input
             v-if="editing && editing.r === r && editing.c === c"
             :ref="el => { if (el) editorEl = el }"
             class="cell-editor"
@@ -466,7 +496,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             @mousedown.stop
             @click.stop
             @dblclick.stop
-          ><template v-else>{{ cellText(ws.lastResult.data[r], col, r, c) }}</template></td>
+          ></td>
         </tr>
       </tbody>
     </table>

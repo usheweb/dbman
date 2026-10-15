@@ -389,8 +389,8 @@
             /* 抬到同层定位兄弟（如 .connection-item）之上，浮标才不会被盖住 */
             z-index: 1;
             transition: opacity .16s ease;
-            /* 鼠标移开后延迟 1s 再收起 */
-            transition-delay: 1s;
+            /* 鼠标移开后延迟 500ms 再收起 */
+            transition-delay: 500ms;
         }
         .panel-toggle:hover .btn-label,
         .panel-toggle:focus-visible .btn-label,
@@ -746,29 +746,20 @@
             font-size: 12px;
             white-space: nowrap;
         }
+        /* 日期筛选：复用 IconSelect（原生 select 在 WKWebView 下不吃自定义背景/边框，会显示成系统控件） */
         .log-date {
-            flex: 0 0 auto;
+            flex: 0 0 180px;
+        }
+        .log-date .icon-select-trigger {
             padding: 8px 10px;
-            background: rgba(var(--void-rgb), .7);
-            border: 1px solid var(--line);
             border-radius: 6px;
             color: var(--text);
             font-family: var(--font-mono);
             font-size: 12px;
-            outline: none;
-            cursor: pointer;
-            transition: all .2s ease;
         }
-        .log-date:hover {
-            border-color: var(--line-strong);
-        }
-        .log-date:focus {
-            border-color: var(--cyan);
-            box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25), 0 0 14px -3px rgba(var(--cyan-rgb), .6);
-        }
-        .log-date option {
-            background: var(--panel-solid);
-            color: var(--text);
+        .log-date .icon-select-caret {
+            color: var(--text-dim);
+            opacity: 1;
         }
         .log-list {
             max-height: 62vh;
@@ -1075,6 +1066,25 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        /* 库列表折叠指示箭头：展开朝下，收起时转向右侧 */
+        .conn-caret {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            color: var(--text-dim);
+            transition: transform .2s ease, color .2s ease;
+        }
+        .conn-caret svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+        .conn-caret.collapsed {
+            transform: rotate(-90deg);
+        }
+        .connection-item:hover .conn-caret {
+            color: var(--cyan);
         }
         .conn-tag {
             flex: 0 0 auto;
@@ -1509,8 +1519,8 @@
             letter-spacing: 0;
             white-space: nowrap;
             transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
-            /* 鼠标移开后延迟 1s 再收起文字：扫过按钮时不至于一闪一收 */
-            transition-delay: 1s;
+            /* 鼠标移开后延迟 500ms 再收起文字：扫过按钮时不至于一闪一收 */
+            transition-delay: 500ms;
         }
         .editor-toolbar .icon-btn:hover .btn-label,
         .editor-toolbar .icon-btn:focus-visible .btn-label,
@@ -1523,6 +1533,14 @@
             margin-left: 6px;
             /* 展开要即时，延迟只作用于收起 */
             transition-delay: 0s;
+        }
+        /* 刷新进行中的图标旋转反馈 */
+        .icon-btn svg.icon-spin {
+            animation: iconSpin 0.8s linear infinite;
+        }
+        @keyframes iconSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
         /* 快捷键小标签：跟随 .btn-label 一起展开 */
         .icon-btn .btn-label .kbd {
@@ -1736,6 +1754,37 @@
             /* 顶部不留 padding：否则粘性表头下方会露出 16px 缝隙，滚动时数据行从缝里透出来 */
             padding: 0 16px 16px;
         }
+        /* 空结果占位：图标在上、文案在下，整体在结果区垂直 + 水平居中 */
+        .result-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 100%;
+            min-height: 180px;
+            color: var(--text-dim);
+        }
+        .result-empty-icon {
+            width: 44px;
+            height: 44px;
+            opacity: .6;
+        }
+        /* 0 行结果：表头下方的紧凑空态（td 内高度按内容撑开） */
+        .data-table td.empty-cell {
+            padding: 0;
+            cursor: default;
+            background: transparent;
+        }
+        .result-empty-compact {
+            height: auto;
+            min-height: 220px;
+        }
+        .result-empty-text {
+            font-size: 13px;
+            font-family: var(--font-cjk);
+            letter-spacing: 1px;
+        }
         .data-table {
             /* 列宽按内容自适应，不强制铺满结果区；内容过宽时由 .result-content 横向滚动 */
             width: auto;
@@ -1773,6 +1822,8 @@
             background: rgba(var(--ink-rgb), .45);
             cursor: pointer;
             transition: background .15s;
+            /* 作为行内编辑输入框的定位参照，输入框绝对定位后不参与列宽计算 */
+            position: relative;
         }
         /* 拖动框选单元格期间屏蔽原生文本选中，避免拉出蓝色文字高亮 */
         .data-table.dragging,
@@ -1815,9 +1866,18 @@
             margin-left: auto;
             min-width: 0;
         }
+        /* 查找输入框：收起态只占一半宽，聚焦后再缓慢展开到完整宽度；
+           失焦立即收回（观感对齐工具条按钮悬停展开文字）。
+           只作用于结果查找条，SQL 日志 / 历史里的 .find-input 不受影响。
+           宽度 140px = 占位文案「在结果中查找...」（6 汉字 78px + 3 个点 9px）
+           完整显示 + 右侧约 2 个汉字留白 26px + 左右内边距与边框 20px */
         .result-find .find-input {
+            width: 140px;
+            min-width: 140px;
+            transition: width .32s cubic-bezier(.4, 0, .2, 1), border-color .2s ease, box-shadow .2s ease;
+        }
+        .result-find .find-input:focus {
             width: 190px;
-            min-width: 110px;
         }
         .find-input {
             width: 190px;
@@ -2077,6 +2137,14 @@
             background: rgba(var(--magenta-rgb), .15);
             color: var(--magenta);
         }
+        /* 置灰项：当前上下文不允许的操作（如 NOT NULL 字段不能设为 NULL），不可点击 */
+        .rs-menu-item.rs-disabled,
+        .rs-menu-item.rs-disabled:hover {
+            background: transparent;
+            color: var(--text-dim);
+            opacity: .5;
+            cursor: default;
+        }
         /* 带子菜单的项（如「设置」）：悬停/展开时高亮，右侧出箭头 */
         .rs-menu-item.rs-open {
             background: rgba(var(--cyan-rgb), .15);
@@ -2230,16 +2298,25 @@
         }
         .modal-content {
             position: relative;
+            display: flex;
+            flex-direction: column;
             background: linear-gradient(160deg, rgba(var(--ink-3-rgb), .96), rgba(var(--ink-rgb), .96));
             border: 1px solid var(--line-strong);
             border-radius: 12px;
-            padding: 22px;
             max-width: 90%;
             max-height: 90%;
-            overflow: auto;
+            overflow: hidden;
             min-width: 400px;
             box-shadow: 0 0 45px -10px rgba(var(--cyan-rgb), .5), inset 0 0 60px -40px rgba(var(--cyan-rgb), .6);
             animation: modalIn .22s ease-out;
+        }
+        /* 内容滚动区：.modal-content 自身不滚动，滚动交给内层，
+           这样四角装饰（::before/::after）才会固定在可见角，而不是随内容滚走 */
+        .modal-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            padding: 22px;
         }
         .modal-content::before,
         .modal-content::after {
@@ -2634,11 +2711,18 @@
             font-style: italic;
             box-shadow: inset 0 0 0 1px rgba(var(--magenta-rgb), .65);
         }
-        /* 行内编辑：双击单元格后原地出现的输入框，铺满格子、不改变行高 */
+        /* 行内编辑：双击单元格后原地出现的输入框。
+           输入框绝对定位、并保留原值文本（见 .cell-view-hidden），
+           这样切进/切出编辑态都不会影响列宽，避免列宽跳动。 */
+        .data-table td .cell-view-hidden {
+            visibility: hidden;
+        }
         .data-table td .cell-editor {
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
+            position: absolute;
+            top: 10px;
+            bottom: 10px;
+            left: 12px;
+            right: 12px;
             padding: 0;
             border: 0;
             background: transparent;

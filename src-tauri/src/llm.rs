@@ -13,9 +13,8 @@ use chrono::{Datelike, Local, Weekday};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
 
-use crate::mysql;
+use crate::db::RelationalDriver;
 use crate::state::{AiSession, AppState};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
@@ -31,10 +30,17 @@ const KEEP_TAIL: usize = 8;
 /// 生成过程中的实时进度事件：每完成一步就推一条，前端不必等整轮结束才看到结果。
 const PROGRESS_EVENT: &str = "ai:progress";
 
-/// system prompt 必须纯静态：只含角色与规则，不含库名/表名，
-/// 这样每次请求的前缀完全一致，可命中上游大模型的前缀缓存。
-const SYSTEM_PROMPT: &str = "\
-你是资深 MySQL 数据库工程师，负责把用户的自然语言需求转换成一条可直接执行的 SQL。
+/// system prompt 按驱动方言生成（除方言外的文字保持纯静态，只含角色与规则，
+/// 不含库名/表名，这样每次请求的前缀基本一致，可命中上游大模型的前缀缓存）。
+/// 新增驱动时在此登记「方言名 + 标识符包裹说明」。
+fn system_prompt(kind: &str) -> String {
+    let (dialect, ident_rule) = match kind {
+        // 后续接入 PostgreSQL / SQLite / SQL Server / Oracle 时在此补充各自方言
+        _ => ("MySQL", "表名与列名用反引号包裹"),
+    };
+    format!(
+        "\
+你是资深 {dialect} 数据库工程师，负责把用户的自然语言需求转换成一条可直接执行的 SQL。
 
 工作方式（必须遵守）：
 1. 你**看不到**数据库里的任何表名和字段，严禁凭猜测编造表名或列名。
@@ -47,10 +53,12 @@ const SYSTEM_PROMPT: &str = "\
 
 输出要求：
 1. 只输出一条 SQL 语句本身，不要任何解释文字，不要使用 ``` 代码围栏。
-2. 使用 MySQL 语法，表名与列名用反引号包裹。
+2. 使用 {dialect} 语法，{ident_rule}。
 3. 除非用户明确要求，不要生成 INSERT / UPDATE / DELETE / DROP / ALTER 等改动数据或结构的语句。
 4. 若需求里的时间范围对应的是时间戳字段，按用户描述的时间语义处理。
-5. 需求里出现「今天/昨天/本周/最近 N 天」等相对时间时，一律以用户消息里给出的「当前时间」为基准换算，禁止使用你自己的训练日期。";
+5. 需求里出现「今天/昨天/本周/最近 N 天」等相对时间时，一律以用户消息里给出的「当前时间」为基准换算，禁止使用你自己的训练日期。"
+    )
+}
 
 /// 当前本地时间（含星期）。动态内容，注入到最后一条 user 消息里，
 /// 否则模型会用训练数据里的日期去算「今天」，导致生成的时间条件完全错误。
@@ -254,7 +262,7 @@ async fn post_chat(
 
 /// 本地执行工具。返回 (给模型看的 JSON 文本, 给前端展示的一行摘要)。
 async fn run_tool(
-    conn: &Arc<Mutex<mysql_async::Conn>>,
+    driver: &Arc<dyn RelationalDriver>,
     database: &str,
     name: &str,
     args: &Value,
@@ -266,8 +274,7 @@ async fn run_tool(
                 .and_then(|v| v.as_str())
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty());
-            let mut guard = conn.lock().await;
-            match mysql::fetch_tables(&mut guard, database, keyword).await {
+            match driver.tables(database, keyword).await {
                 Ok(list) => {
                     let total = list.len();
                     let shown: Vec<Value> = list
@@ -301,8 +308,7 @@ async fn run_tool(
                     "参数缺失".to_string(),
                 );
             }
-            let mut guard = conn.lock().await;
-            match mysql::fetch_columns(&mut guard, database, &table).await {
+            match driver.columns(database, &table).await {
                 Ok(cols) => {
                     let list: Vec<Value> = cols
                         .iter()
@@ -351,8 +357,8 @@ async fn run_tool(
                 .get("limit")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(30) as usize;
-            let mut guard = conn.lock().await;
-            match mysql::fetch_distinct_values(&mut guard, database, &table, &column, keyword, limit)
+            match driver
+                .distinct_values(database, &table, &column, keyword, limit)
                 .await
             {
                 Ok((values, truncated)) => {
@@ -459,13 +465,10 @@ pub async fn ai_generate_sql(
         .build()
         .map_err(|e| format!("初始化 HTTP 客户端失败：{}", e))?;
 
-    let conn = state.get_mysql(&conn_id).await?;
+    let driver = state.get_driver(&conn_id).await?;
 
     // 只取表总数用于提示（不传任何表名/结构）；动态内容放最后一条 user 消息。
-    let total_tables = {
-        let mut guard = conn.lock().await;
-        mysql::fetch_tables(&mut guard, &database, None).await?.len()
-    };
+    let total_tables = driver.tables(&database, None).await?.len();
 
     // 追问式微调：按「连接 + 库」保留会话上下文，继续时在其基础上追加一条 user 消息。
     let key = format!("{}::{}", conn_id, database);
@@ -499,7 +502,7 @@ pub async fn ai_generate_sql(
     let mut messages: Vec<Value> = reused.unwrap_or_default();
     if messages.is_empty() {
         messages = vec![
-            json!({ "role": "system", "content": SYSTEM_PROMPT }),
+            json!({ "role": "system", "content": system_prompt(driver.kind()) }),
             json!({
                 "role": "user",
                 "content": format!(
@@ -591,7 +594,7 @@ pub async fn ai_generate_sql(
                     .unwrap_or_else(|| json!({}));
 
                 let started = Instant::now();
-                let (content, summary) = run_tool(&conn, &database, &name, &args).await;
+                let (content, summary) = run_tool(&driver, &database, &name, &args).await;
                 // 该步执行完立刻推给前端。本地元数据查询多在几十毫秒内，
                 // 按秒保留 1 位小数会被四舍五入成 0.0s，故传毫秒由前端决定显示单位。
                 let elapsed_ms = started.elapsed().as_millis() as u64;

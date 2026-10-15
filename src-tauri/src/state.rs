@@ -5,12 +5,13 @@ use std::time::Instant;
 
 use tokio::sync::Mutex;
 
+use crate::db::RelationalDriver;
 use crate::ssh::Tunnel;
 
-/// 已建立的数据库连接。MySQL 需要 &mut 才能查询，用 Mutex 包一层；
-/// Redis 的 ConnectionManager 本身廉价可 Clone，直接存。
+/// 已建立的数据库连接。关系型库统一以 `Arc<dyn RelationalDriver>` 存储，
+/// 驱动内部自行持有并加锁连接；Redis 的 ConnectionManager 本身廉价可 Clone，直接存。
 pub enum DbConn {
-    Mysql(Arc<Mutex<mysql_async::Conn>>),
+    Relational(Arc<dyn RelationalDriver>),
     Redis(redis::aio::ConnectionManager),
 }
 
@@ -40,15 +41,15 @@ impl AppState {
         }
     }
 
-    /// 取出 MySQL 连接；找不到或类型不符统一返回 "Invalid connection"，
+    /// 取出关系型库驱动；找不到或类型不符统一返回 "Invalid connection"，
     /// 前端依赖这个字符串触发自动重连。
-    pub async fn get_mysql(
+    pub async fn get_driver(
         &self,
         conn_id: &str,
-    ) -> Result<Arc<Mutex<mysql_async::Conn>>, String> {
+    ) -> Result<Arc<dyn RelationalDriver>, String> {
         let map = self.connections.lock().await;
         match map.get(conn_id) {
-            Some(DbConn::Mysql(c)) => Ok(c.clone()),
+            Some(DbConn::Relational(c)) => Ok(c.clone()),
             _ => Err("Invalid connection".to_string()),
         }
     }

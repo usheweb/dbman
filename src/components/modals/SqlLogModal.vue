@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue';
 import ModalShell from '@/components/common/ModalShell.vue';
+import IconSelect from '@/components/common/IconSelect.vue';
 import { useUiStore } from '@/stores/ui';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useSqlStore } from '@/stores/sql';
@@ -17,6 +18,11 @@ const searchInput = ref(null);
 
 const items = computed(() => sqlStore.filterLogs(keyword.value, date.value));
 const dates = computed(() => sqlStore.logDates());
+// 供 IconSelect 使用：首项为「全部日期」，其余按日期 + 条数展示
+const dateOptions = computed(() => [
+  { value: '', label: '全部日期' },
+  ...dates.value.map(d => ({ value: d.date, label: `${d.date}（${d.count}）` }))
+]);
 
 watch(() => ui.modals.sqlLogModal, async (v) => {
   if (v) {
@@ -64,10 +70,14 @@ function clearLog() {
     <template #title>SQL 日志</template>
     <div class="log-tools">
       <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="find-input" ref="searchInput" v-model="keyword" placeholder="模糊匹配 SQL 语句..." title="支持包含匹配与模糊匹配">
-      <select class="log-date" v-model="date" title="按日期筛选">
-        <option value="">全部日期</option>
-        <option v-for="d in dates" :key="d.date" :value="d.date">{{ d.date }}（{{ d.count }}）</option>
-      </select>
+      <IconSelect
+        class="log-date"
+        :model-value="date"
+        :options="dateOptions"
+        placeholder="全部日期"
+        title="按日期筛选"
+        @update:model-value="v => (date = v)"
+      />
       <span class="log-count">{{ items.length }} / {{ sqlStore.sqlLog.length }} 条</span>
       <button class="btn btn-secondary" @click="clearLog">清空日志</button>
     </div>

@@ -12,7 +12,8 @@ import {
 import {
   detectDangerousStatements, detectSqlType, sqlLogClass,
   splitTopLevelClauses, rebuildSql, stripSqlLiterals, sqlIdent, sqlQuote,
-  sqlLiteralFor, sqlLiteralForTyped, parseWhereToRows
+  sqlLiteralFor, sqlLiteralForTyped, parseWhereToRows,
+  parseSqlNameError, rankSimilar, queryTableNames, replaceIdent
 } from '@/utils/sql';
 
 const MODE_LABEL = { raw: '原值', timestamp: '时间', enum: '文字' };
@@ -46,6 +47,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const lastSql = ref('');
   const lastResult = ref(null); // { data, fields, colInfo }
+  const loading = ref(false);   // 本次执行是否还在等数据库回包
+  const refreshing = ref(false); // 刷新动作是否在进行（含最短可见时长，见 refreshResult）
+  // 结果区刷新按钮的可见态：执行中变暗 + 图标转圈
+  const busy = computed(() => loading.value || refreshing.value);
   const columnModes = ref({});  // 单列显式覆盖
   const globalDisplay = ref({ timestamp: false, enum: false });
 
@@ -85,6 +90,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     checkboxLabel: '', checkboxValue: false, confirmText: '确定', danger: false
   });
   let resultConfirmResolver = null;
+
+  // 表名 / 字段名纠错弹窗：SQL 报「找不到表/字段」时，按相似度列出候选让用户挑选，Promise 化
+  const identSuggest = ref({ visible: false, kind: 'table', name: '', db: null, candidates: [] });
+  let identSuggestResolver = null;
 
   // Insert / Update 生成面板：打开时的行列初值
   const sqlGenPanel = ref({ visible: false, mode: 'insert', rows: [], cols: [], keepDb: false });
@@ -161,6 +170,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       historyView.value = null;
       resetFindState();
       recomputeMatches();
+      refreshResultNullables();
       return;
     }
     const entry = (histories.value[conn.currentConnId] || []).find(e => e.id === entryId);
@@ -182,6 +192,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     resetFindState();
     recomputeMatches();
     if (loadSql) setSql(entry.sql);
+    refreshResultNullables();
   }
 
   // ===== 编辑器 =====
@@ -276,6 +287,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function cancelTabScopedDialogs() {
     if (execConfirm.value.visible) resolveExecConfirm(false);
     if (resultConfirm.value.visible) resolveResultConfirm(false);
+    if (identSuggest.value.visible) resolveIdentSuggest(null);
     if (filterDialog.value.visible) closeFilterDialog();
     if (sqlGenPanel.value.visible) closeSqlGenPanel();
     if (cellEdit.value.visible) closeCellEdit();
@@ -437,8 +449,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 结果集列名
   const resultColumns = computed(() => {
     const r = lastResult.value;
-    if (!r || !r.data || !r.data.length) return [];
-    return (r.fields && r.fields.length) ? r.fields.map(f => f.name) : Object.keys(r.data[0]);
+    if (!r || !r.data) return [];
+    // 0 行时列元数据仍在 fields 里（空结果也要能显示表头）
+    if (r.fields && r.fields.length) return r.fields.map(f => f.name);
+    return r.data.length ? Object.keys(r.data[0]) : [];
   });
 
   const columnModesForRender = computed(() => {
@@ -502,7 +516,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // ===== 查询执行 =====
   // 分页时多取一行，用来判断是否还有下一页（不用额外查 COUNT）
   async function fetchRows(sql, page) {
-    return conn.withRetry(id => api.mysqlQuery(
+    return conn.withRetry(id => api.dbQuery(
       id, sql, conn.currentDatabase, pageSize.value + 1, (page - 1) * pageSize.value
     ));
   }
@@ -515,6 +529,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       pageNo.value = page;
       pageInfo.value = { hasMore: false, paged: false, elapsed, rows: data.affected || 0, write: true, idle: false, error: '' };
       lastResult.value = null;
+      resultNullables.value = {};
       return;
     }
     const paged = data.paged !== false;
@@ -526,6 +541,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     lastResult.value = { data: rows, fields: data.fields || [], colInfo };
     pageNo.value = page;
     pageInfo.value = { hasMore, paged, elapsed, rows: rows.length, write: false, idle: false, error: '' };
+    refreshResultNullables();
   }
 
   // 弹出二次确认框，返回 Promise<boolean>
@@ -544,8 +560,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   // 执行一段指定 SQL：整段执行与行内「执行这一行」共用同一套流程与日志
-  async function runSql(sql, confirmed) {
-    if (!sql || !sql.trim()) return;
+  // retried：纠错后自动重跑时置 true，避免再次进入纠错逻辑造成死循环
+  async function runSql(sql, confirmed, retried) {
+    if (!sql || !sql.trim()) return false;
     // 开跑时记下来源 Tab / 连接 / 库：结果回来时用户可能已经切走 Tab 或连接
     const tabId = liveTabId;
     const connId = conn.currentConnId;
@@ -554,13 +571,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // 会改动数据 / 结构 / 权限或实例状态的语句，执行前必须二次确认
     if (!confirmed) {
       const kinds = detectDangerousStatements(sql);
-      if (kinds.length && !(await askExecConfirm(kinds, sql))) return;
-      if (tabId !== liveTabId) return; // 确认期间切走了 Tab，放弃这次执行
+      if (kinds.length && !(await askExecConfirm(kinds, sql))) return false;
+      if (tabId !== liveTabId) return false; // 确认期间切走了 Tab，放弃这次执行
     }
     lastSql.value = sql;
     columnModes.value = {}; // 新一次查询：清空单列覆盖
     resetFindState();
     const started = Date.now();
+    loading.value = true;
     try {
       const data = await fetchRows(sql, 1);
       const elapsed = Date.now() - started;
@@ -580,9 +598,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       pushHistory(sql, connId, db, src);
       addSqlLog(sql, { success: true, elapsed, rows: src.pageInfo.rows }, connData, db);
+      return true;
     } catch (err) {
-      renderError(err.message, tabId);
-      addSqlLog(sql, { success: false, elapsed: Date.now() - started, error: err.message }, connData, db);
+      const msg = err.message;
+      // 表名 / 字段名写错：解析报错文案，给出相似名称让用户挑选，替换后写回编辑器并重跑（只重试一次）
+      if (!retried) {
+        const hit = await tryFixIdentifiers(msg, sql);
+        if (hit) {
+          writeBackFix(tabId, hit, sql);
+          return runSql(hit.fixed, true, true);
+        }
+      }
+      renderError(msg, tabId);
+      addSqlLog(sql, { success: false, elapsed: Date.now() - started, error: msg }, connData, db);
+      return false;
+    } finally {
+      loading.value = false;
     }
   }
 
@@ -593,6 +624,34 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 编辑器行内「执行这一行」：直接跑传入的文本，不覆盖编辑器里的完整脚本
   function executeSqlText(sql) {
     return runSql(sql);
+  }
+
+  // 刷新按钮的最短可见时长：本地小表往往几十毫秒就返回，不兜底用户看不到任何反馈
+  const REFRESH_MIN_FEEDBACK_MS = 600;
+
+  // 刷新当前结果：重新执行「产生当前这张表的那条 SQL」，不读编辑器（用户可能已经改过编辑器内容）
+  // 不清空旧数据（避免闪烁 / 慢查询时干等），完成后弹提示反馈
+  async function refreshResult() {
+    if (!lastSql.value || !lastSql.value.trim()) {
+      ui.showToast('当前没有可刷新的查询', 'error');
+      return;
+    }
+    if (refreshing.value) return; // 正在刷新，忽略连点
+    if (!confirmDiscardEdits()) return;
+    refreshing.value = true;
+    const started = Date.now();
+    try {
+      const ok = await runSql(lastSql.value, false);
+      // 查询再快也把可见态兜满最短时长，否则按钮来不及变暗就恢复了
+      const rest = REFRESH_MIN_FEEDBACK_MS - (Date.now() - started);
+      if (rest > 0) await new Promise(r => setTimeout(r, rest));
+      if (ok) {
+        const info = pageInfo.value;
+        ui.showToast(info.write ? `已刷新 · 影响 ${info.rows} 行 · ${info.elapsed}ms` : `已刷新 · ${info.rows} 行 · ${info.elapsed}ms`);
+      }
+    } finally {
+      refreshing.value = false;
+    }
   }
 
   // 翻页 / 改每页条数：复用最近一次执行的 SQL 重新查库，保留查找状态
@@ -851,7 +910,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     });
     if (!path) return;
     try {
-      await api.mysqlExport(
+      await api.dbExport(
         conn.serverConnId, lastSql.value, conn.currentDatabase,
         buildExportHeaders(cols),
         cols.map(col => {
@@ -980,6 +1039,103 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (resolve) resolve({ ok: !!ok, checked: checked === undefined ? cur.checkboxValue : !!checked });
   }
 
+  // ===== 表名 / 字段名纠错弹窗 =====
+  function askIdentSuggest(payload) {
+    return new Promise(resolve => {
+      identSuggestResolver = resolve;
+      identSuggest.value = { visible: true, kind: 'table', name: '', db: null, candidates: [], ...payload };
+    });
+  }
+
+  function resolveIdentSuggest(choice) {
+    const cur = identSuggest.value;
+    identSuggest.value = { ...cur, visible: false };
+    const resolve = identSuggestResolver;
+    identSuggestResolver = null;
+    if (resolve) resolve(choice || null);
+  }
+
+  // ===== 表名 / 字段名智能纠错 =====
+  // 当前连接的可见表名清单：优先用侧栏已加载的（零开销），为空时再查一次
+  async function tableNamesForFix() {
+    const local = conn.allTables || [];
+    if (local.length) return local.map(t => t.tableName).filter(Boolean);
+    try {
+      const data = await conn.withRetry(id => api.dbTables(id, conn.currentDatabase, null));
+      return (data || []).map(t => t.tableName).filter(Boolean);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 这批表所有列的并集（多表 JOIN 时无法定位列归属，合并后一起比对）
+  async function columnsForFix(tables) {
+    const out = [];
+    const seen = new Set();
+    const push = list => (list || []).forEach(c => {
+      const name = c && (c.columnName || c.name);
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(name);
+    });
+    for (const t of tables) {
+      const cached = conn.tableColumns && conn.tableColumns[t];
+      if (cached && cached.length) { push(cached); continue; }
+      try {
+        const data = await conn.withRetry(id => api.dbColumns(id, conn.currentDatabase, t));
+        push(data);
+      } catch (e) { /* 拿不到这张表的列，跳过 */ }
+    }
+    return out;
+  }
+
+  // 按相似度排序后弹窗让用户挑选；用户选了就返回替换后的 SQL 以及「错名 → 正名」
+  async function suggestReplacement(info, pool, sql) {
+    // 候选最多 3 个，按相似度降序（rankSimilar 已排好序）
+    const candidates = rankSimilar(info.name, pool, 3);
+    if (!candidates.length) return null;
+    const picked = await askIdentSuggest({ kind: info.kind, name: info.name, db: info.db, candidates });
+    if (!picked) return null;
+    const fixed = replaceIdent(sql, info.name, picked);
+    if (fixed === sql) return null;
+    return { fixed, wrong: info.name, right: picked };
+  }
+
+  // 纠正结果回写编辑器。本次执行的 SQL 恰好等于编辑器全文时整篇替换；
+  // 行内执行 / 刷新按钮（执行的 SQL 未必等于编辑器内容）时只精确替换那一个标识符，不覆盖用户正在写的内容
+  function writeBackFix(tabId, hit, executedSql) {
+    const current = tabId === liveTabId ? getSql() : ((tabSnapshots[tabId] || {}).sql || '');
+    const next = current === executedSql ? hit.fixed : replaceIdent(current, hit.wrong, hit.right);
+    if (next && next !== current) setSqlForTab(tabId, next);
+  }
+
+  // 解析报错里点名的表名 / 字段名，给出 { fixed, wrong, right }；无法纠正或用户取消时返回 null
+  async function tryFixIdentifiers(msg, sql) {
+    const info = parseSqlNameError(msg);
+    if (!info) return null;
+    const known = await tableNamesForFix();
+    if (!known.length) return null;
+
+    if (info.kind === 'table') {
+      // 本地清单里已有这张表 → 不是名字写错（可能是权限/库选错），不提示
+      if (known.some(n => n.toLowerCase() === info.name.toLowerCase())) return null;
+      return suggestReplacement(info, known, sql);
+    }
+
+    // 字段名：先确认引用到的表名都是对的，再拿这些表的列做相似度比对
+    const tables = queryTableNames(sql);
+    if (!tables.length) return null;
+    const knownSet = new Set(known.map(n => n.toLowerCase()));
+    if (!tables.every(t => knownSet.has(t.toLowerCase()))) return null;
+    const columns = await columnsForFix(tables);
+    if (!columns.length) return null;
+    // 列其实存在 → 报错另有原因（如表别名限定），不误判成写错
+    if (columns.some(c => c.toLowerCase() === info.name.toLowerCase())) return null;
+    return suggestReplacement(info, columns, sql);
+  }
+
   // ===== 结果集对应的数据表 / 主键 =====
   // 从最近一次 SQL 的 FROM 子句解析目标表（支持 `db`.`tbl` / db.tbl / tbl）
   function resultTableRef() {
@@ -1001,13 +1157,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // 表结构（含列的 columnKey，用主键定位记录），按「连接 + 库.表」缓存避免重复请求
   const structureCache = {};
+  // 结果集对应表各列是否允许 NULL（来自表结构）：{ [列名]: bool }
+  // 用于右键菜单里把 NOT NULL 字段的「设置为 NULL」置灰；拿不到结构时为空
+  const resultNullables = ref({});
+
   async function loadResultStructure(ref) {
     if (!ref) return null;
     const key = (conn.currentConnId || '') + '|' + ref.key;
     if (key in structureCache) return structureCache[key];
     let st = null;
     try {
-      st = await conn.withRetry(id => api.mysqlTableStructure(
+      st = await conn.withRetry(id => api.dbTableStructure(
         id, ref.db || conn.currentDatabase || '', ref.table
       ));
     } catch (e) {
@@ -1015,6 +1175,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     structureCache[key] = st;
     return st;
+  }
+
+  // 结果集换内容后刷新一次各列的可空信息；拿不到表结构就留空（菜单保持可用，不误禁）
+  async function refreshResultNullables() {
+    const ref = resultTableRef();
+    if (!ref) { resultNullables.value = {}; return; }
+    const st = await loadResultStructure(ref);
+    // 期间结果可能已切到别的表，别把旧结构写进来
+    const cur = resultTableRef();
+    if (!cur || cur.key !== ref.key) return;
+    const map = {};
+    if (st && st.columns) st.columns.forEach(c => { map[c.name] = c.nullable !== false; });
+    resultNullables.value = map;
+  }
+
+  // 该列是否允许写 NULL；未知（没有表结构）时返回 true，保持菜单可用
+  function columnNullable(col) {
+    const m = resultNullables.value;
+    return (col in m) ? m[col] : true;
   }
 
   function pkColumnsOf(structure) {
@@ -1051,7 +1230,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!conds.length) return null;
     try {
       const sql = `SELECT COUNT(*) AS c FROM ${qualTable(ref, false)} WHERE ${conds.join(' OR ')}`;
-      const res = await conn.withRetry(id => api.mysqlQuery(
+      const res = await conn.withRetry(id => api.dbQuery(
         id, sql, ref.db || conn.currentDatabase, 0, 0
       ));
       const first = (res.rows && res.rows[0]) || null;
@@ -1061,7 +1240,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  // 批量执行多条 DML（mysql_exec_ddl 原生支持多语句），成功后刷新当前页并清空暂存
+  // 批量执行多条 DML（db_exec_script 原生支持多语句），成功后刷新当前页并清空暂存
   async function execBatchDml(statements, label, confirmed) {
     const sqlText = statements.join('\n');
     const tabId = liveTabId;
@@ -1074,7 +1253,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     const started = Date.now();
     try {
-      await conn.withRetry(id => api.mysqlExecDdl(id, conn.currentDatabase || '', sqlText));
+      await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase || '', sqlText));
       addSqlLog(sqlText, { success: true, elapsed: Date.now() - started, rows: statements.length }, connData, db);
       if (tabId === liveTabId) {
         clearPendingEdits();
@@ -1277,7 +1456,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   return {
-    editor, draftSql, lastSql, lastResult, columnModes, globalDisplay,
+    editor, draftSql, lastSql, lastResult, busy, columnModes, globalDisplay,
     queryTabs, activeTabId, activeTabs, newQueryTab, activateQueryTab, closeQueryTab, setSqlForTab,
     pageSize, pageNo, pageInfo, findState, matchCells, matchCount,
     execConfirm, filterDialog,
@@ -1285,9 +1464,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setPendingEdits, setCellEdit, clearPendingEdits, discardPendingEdits, savePendingEdits,
     cellEdit, openCellEdit, closeCellEdit, commitCellEdit,
     resultConfirm, askResultConfirm, resolveResultConfirm,
+    identSuggest, askIdentSuggest, resolveIdentSuggest,
     sqlGenPanel, openSqlGenPanel, closeSqlGenPanel, sqlGenContext,
     buildInsertSql, buildUpdateSql,
     resultTableRef, deleteResultRows, copyResultAsTsv,
+    resultNullables, columnNullable, refreshResultNullables,
     histories, historyList, historyView, selectHistory, trimHistories,
     resultColumns, columnModesForRender, visibleRowIndexes,
     MODE_LABEL,
@@ -1295,7 +1476,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     currentColComments, effectiveColumnMode, applyDisplayMode, analyzeColumns,
     toggleGlobalMode, toggleColumnMode,
     rowHit, cellHit, recomputeMatches,
-    executeQuery, executeSqlText, reloadPage, gotoPage, changePageSize,
+    executeQuery, executeSqlText, refreshResult, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
     openFilterDialog, closeFilterDialog, applyFilter,

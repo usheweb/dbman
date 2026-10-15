@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useConnectionStore } from '@/stores/connection';
+import { isRelational, isFileBased } from '@/utils/dbType';
 import TableTree from '@/components/database/TableTree.vue';
 import RedisTree from '@/components/database/RedisTree.vue';
 import RedisDetail from '@/components/redis/RedisDetail.vue';
@@ -12,6 +13,8 @@ const connStore = useConnectionStore();
 const connectingTarget = computed(() => {
   const c = connStore.currentConnData;
   if (!c) return '';
+  // 本地文件型（如 SQLite）没有主机端口，展示文件路径
+  if (isFileBased(c.type)) return c.database || '';
   return c.port ? c.host + ':' + c.port : c.host;
 });
 </script>
@@ -20,7 +23,7 @@ const connectingTarget = computed(() => {
   <div class="database-panel">
     <div v-if="!connStore.currentConnData" class="no-connection">请先创建并选择一个数据库连接</div>
     <div v-else-if="!connStore.isConnected" class="no-connection">正在连接 {{ connectingTarget }} …</div>
-    <template v-else-if="connStore.currentConnData.type === 'mysql'">
+    <template v-else-if="isRelational(connStore.currentConnData.type)">
       <TableTree />
       <SqlWorkspace />
     </template>

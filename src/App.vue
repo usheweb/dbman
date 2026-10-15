@@ -29,6 +29,7 @@ import ExportSqlModal from '@/components/modals/ExportSqlModal.vue';
 import TableDesignerModal from '@/components/modals/TableDesignerModal.vue';
 import CsvImportModal from '@/components/modals/CsvImportModal.vue';
 import ResultConfirmModal from '@/components/modals/ResultConfirmModal.vue';
+import IdentifierSuggestModal from '@/components/modals/IdentifierSuggestModal.vue';
 import CellEditModal from '@/components/modals/CellEditModal.vue';
 import ResultSqlPanel from '@/components/modals/ResultSqlPanel.vue';
 import PromoModal from '@/components/modals/PromoModal.vue';
@@ -85,8 +86,11 @@ function onCtxSelect(item) {
 // 启动引导：先把本地文件里的数据读进内存，后面的渲染/绑定才有正确的初始状态
 onMounted(async () => {
   await store.load();
-  // 「唐三浪学习时钟」推广弹窗：当天勾选过「今日不再提示」就跳过，次日恢复弹出
-  if (store.get('dbman_promo_skip_date') !== todayKey()) ui.openModal('promoModal');
+  // 「唐三浪学习时钟」推广弹窗：勾选过「7 天内不再提示」且未到期就跳过，
+  // 到期后再弹一次（勾选偏好仍在，关闭后又顺延一周）—— 等效每周一次
+  const promoSkipEnabled = store.get('dbman_promo_skip_enabled') === '1';
+  const promoUntil = store.get('dbman_promo_skip_until') || '';
+  if (!(promoSkipEnabled && todayKey() <= promoUntil)) ui.openModal('promoModal');
   ui.init();
   conn.init();
   ws.init();
@@ -132,6 +136,7 @@ onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMe
   <TableDesignerModal />
   <CsvImportModal />
   <ResultConfirmModal />
+  <IdentifierSuggestModal />
   <CellEditModal />
   <ResultSqlPanel />
   <PromoModal :visible="ui.modals.promoModal" @close="ui.closeModal('promoModal')" />

@@ -26,7 +26,7 @@ function hasChildren(it) {
 
 function openSub(i) {
   const it = props.items[i];
-  if (!hasChildren(it)) {
+  if (!hasChildren(it) || it.disabled) {
     openIndex.value = -1;
     return;
   }
@@ -46,6 +46,8 @@ function openSub(i) {
 }
 
 function onItemClick(i, it) {
+  // 置灰项不响应点击
+  if (it.disabled) return;
   if (hasChildren(it)) {
     // 有子菜单的项本身不触发动作，点一下切换展开状态
     if (openIndex.value === i) openIndex.value = -1;
@@ -89,7 +91,7 @@ onBeforeUnmount(() => {
           v-else
           :ref="el => (rowEls[index] = el)"
           class="rs-menu-item"
-          :class="{ 'rs-danger': it.danger, 'rs-open': openIndex === index }"
+          :class="{ 'rs-danger': it.danger, 'rs-open': openIndex === index, 'rs-disabled': it.disabled }"
           @click="onItemClick(index, it)"
           @mouseenter="openSub(index)"
         >

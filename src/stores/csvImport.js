@@ -52,7 +52,7 @@ export const useCsvImportStore = defineStore('csvImport', () => {
   async function loadTargetColumns() {
     try {
       const cols = await conn.withRetry(id =>
-        api.mysqlColumns(id, conn.currentDatabase, modal.value.table)
+        api.dbColumns(id, conn.currentDatabase, modal.value.table)
       );
       targetColumns.value = cols.map(c => c.name);
     } catch (e) {
@@ -120,7 +120,7 @@ export const useCsvImportStore = defineStore('csvImport', () => {
       batchSize: parseInt(options.value.batchSize, 10) || 500
     };
     try {
-      const res = await conn.withRetry(id => api.mysqlImportCsv(
+      const res = await conn.withRetry(id => api.dbImportCsv(
         id,
         conn.currentDatabase,
         modal.value.table,

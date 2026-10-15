@@ -16,7 +16,9 @@ export const STORE_KEYS = [
   'dbman_sql_favorites',
   'dbman_ai_config',
   'dbman_result_history',
-  'dbman_promo_skip_date'
+  // 推广弹窗「7 天内不再提示」：勾选偏好 + 跳过到期日（YYYY-MM-DD）
+  'dbman_promo_skip_enabled',
+  'dbman_promo_skip_until'
 ];
 
 export const useStoreStore = defineStore('store', () => {

@@ -1,11 +1,8 @@
 // CSV 导入：文本解码（UTF-8 / GB18030）、RFC4180 解析、预览、批量 INSERT
 use encoding_rs::{GB18030, UTF_8};
-use mysql_async::prelude::Queryable;
-use mysql_async::{Conn, Params, Value};
 use tauri::State;
 
 use crate::models::{CsvImportOptions, CsvImportResult, CsvPreview};
-use crate::mysql::use_database;
 use crate::state::AppState;
 
 /// 预览时允许读取的文件上限，避免一次把超大文件读进内存
@@ -132,10 +129,6 @@ fn resolve_delimiter(spec: Option<&str>, text: &str) -> char {
     }
 }
 
-fn qi_name(name: &str) -> String {
-    format!("`{}`", name.replace('`', "``"))
-}
-
 // ===== 预览 =====
 
 #[tauri::command]
@@ -192,47 +185,9 @@ pub fn csv_preview(
 
 // ===== 导入 =====
 
-fn cell_to_value(cell: Option<&String>, null_value: &str, empty_as_null: bool) -> Value {
-    match cell {
-        None => Value::NULL,
-        Some(s) => {
-            if !null_value.is_empty() && s == null_value {
-                Value::NULL
-            } else if empty_as_null && s.is_empty() {
-                Value::NULL
-            } else {
-                Value::Bytes(s.clone().into_bytes())
-            }
-        }
-    }
-}
-
-/// 执行一批 INSERT；placeholder 形如 "(?, ?)"，cols 中记录了 CSV 列下标与目标字段名
-async fn insert_batch(
-    conn: &mut Conn,
-    prefix: &str,
-    placeholder: &str,
-    cols: &[(usize, String)],
-    rows: &[Vec<String>],
-    null_value: &str,
-    empty_as_null: bool,
-) -> Result<(), String> {
-    let values = vec![placeholder; rows.len()].join(", ");
-    let sql = format!("{}{}", prefix, values);
-    let mut params = Vec::with_capacity(rows.len() * cols.len());
-    for row in rows {
-        for (idx, _) in cols {
-            params.push(cell_to_value(row.get(*idx), null_value, empty_as_null));
-        }
-    }
-    conn.exec_drop(sql, Params::Positional(params))
-        .await
-        .map_err(|e| e.to_string())
-}
-
 /// mapping：下标对应 CSV 列序，值为目标字段名（None / 空串表示该列不导入）
 #[tauri::command]
-pub async fn mysql_import_csv(
+pub async fn db_import_csv(
     state: State<'_, AppState>,
     conn_id: String,
     database: String,
@@ -280,20 +235,39 @@ pub async fn mysql_import_csv(
     let truncate_first = options.truncate_first.unwrap_or(false);
     let batch_size = options.batch_size.unwrap_or(500).clamp(1, 5000);
 
-    let col_list = cols.iter().map(|(_, c)| qi_name(c)).collect::<Vec<_>>().join(", ");
-    let prefix = format!("INSERT INTO {} ({}) VALUES ", qi_name(&table), col_list);
-    let placeholder = format!("({})", vec!["?"; cols.len()].join(", "));
+    let col_names: Vec<String> = cols.iter().map(|(_, c)| c.clone()).collect();
 
-    let conn = state.get_mysql(&conn_id).await?;
-    let mut guard = conn.lock().await;
-    use_database(&mut guard, &database).await?;
+    let driver = state.get_driver(&conn_id).await?;
 
     if truncate_first {
-        guard
-            .exec_drop(format!("TRUNCATE TABLE {}", qi_name(&table)), ())
+        driver
+            .truncate_table(&database, &table)
             .await
             .map_err(|e| format!("清空表失败：{}", e))?;
     }
+
+    // 把一批 CSV 行映射为与 col_names 对齐的单元格（None 表示 SQL NULL）
+    let to_batch = |slice: &[Vec<String>]| -> Vec<Vec<Option<String>>> {
+        slice
+            .iter()
+            .map(|row| {
+                cols.iter()
+                    .map(|(idx, _)| match row.get(*idx) {
+                        None => None,
+                        Some(s) => {
+                            if !null_value.is_empty() && s == &null_value {
+                                None
+                            } else if empty_as_null && s.is_empty() {
+                                None
+                            } else {
+                                Some(s.clone())
+                            }
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    };
 
     let mut inserted: u64 = 0;
     let mut failed: u64 = 0;
@@ -304,10 +278,10 @@ pub async fn mysql_import_csv(
     while start < total {
         let end = (start + batch_size).min(total);
         let slice = &rows[start..end];
-        let batch_result = insert_batch(
-            &mut guard, &prefix, &placeholder, &cols, slice, &null_value, empty_as_null,
-        )
-        .await;
+        let batch = to_batch(slice);
+        let batch_result = driver
+            .insert_rows(&database, &table, &col_names, &batch)
+            .await;
 
         match batch_result {
             Ok(()) => inserted += (end - start) as u64,
@@ -318,10 +292,10 @@ pub async fn mysql_import_csv(
                 // 跳过错误行模式：退回逐行插入，精确定位坏行
                 for (off, row) in slice.iter().enumerate() {
                     let one = std::slice::from_ref(row);
-                    match insert_batch(
-                        &mut guard, &prefix, &placeholder, &cols, one, &null_value, empty_as_null,
-                    )
-                    .await
+                    let one_batch = to_batch(one);
+                    match driver
+                        .insert_rows(&database, &table, &col_names, &one_batch)
+                        .await
                     {
                         Ok(()) => inserted += 1,
                         Err(er) => {

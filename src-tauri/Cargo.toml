@@ -41,6 +41,11 @@ chrono = { version = "0.4", features = ["clock"] }
 # 大模型 HTTP 客户端：rustls 避免引入 OpenSSL 系统库，保持体积可控
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 encoding_rs = { version = "0.8.35", default-features = false, features = ["alloc"] }
+tokio-postgres = { version = "0.7", default-features = false, features = ["runtime", "with-chrono-0_4", "with-serde_json-1"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+tiberius = { version = "0.12", default-features = false, features = ["rustls", "tds73", "chrono"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+oracle = { version = "0.6", default-features = false, features = ["chrono"] }
 
 [profile.release]
 codegen-units = 1

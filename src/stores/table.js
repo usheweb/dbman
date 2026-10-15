@@ -27,7 +27,7 @@ export const useTableStore = defineStore('table', () => {
   async function openDdl(table) {
     ddlModal.value = { visible: true, table, ddl: '', loading: true };
     try {
-      const ddl = await conn.withRetry(id => api.mysqlTableDdl(id, conn.currentDatabase, table));
+      const ddl = await conn.withRetry(id => api.dbTableDdl(id, conn.currentDatabase, table));
       ddlModal.value = { visible: true, table, ddl, loading: false };
     } catch (e) {
       ddlModal.value = { ...ddlModal.value, loading: false };
@@ -42,7 +42,7 @@ export const useTableStore = defineStore('table', () => {
 
   // 读取并规范化表结构（供设计器使用）
   async function loadStructure(table) {
-    const raw = await conn.withRetry(id => api.mysqlTableStructure(id, conn.currentDatabase, table));
+    const raw = await conn.withRetry(id => api.dbTableStructure(id, conn.currentDatabase, table));
     return normalizeStructure(raw);
   }
 
@@ -89,7 +89,7 @@ export const useTableStore = defineStore('table', () => {
 
   // 直接执行 DDL 脚本（会抛错，供设计器自行处理错误展示）
   async function execDdl(sql, affected, action) {
-    const count = await conn.withRetry(id => api.mysqlExecDdl(id, conn.currentDatabase, sql));
+    const count = await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase, sql));
     await refreshAfterDdl(affected, action);
     return count;
   }
@@ -102,7 +102,7 @@ export const useTableStore = defineStore('table', () => {
     });
     if (!path) return false;
     try {
-      const ddl = await conn.withRetry(id => api.mysqlTableDdl(id, conn.currentDatabase, table));
+      const ddl = await conn.withRetry(id => api.dbTableDdl(id, conn.currentDatabase, table));
       if (!ddl) throw new Error('未能获取建表语句');
       const parts = [];
       if (opts.withDrop !== false) parts.push(`DROP TABLE IF EXISTS ${qi(table)};`);
@@ -123,7 +123,7 @@ export const useTableStore = defineStore('table', () => {
     });
     if (!path) return false;
     try {
-      const count = await conn.withRetry(id => api.mysqlExportDataSql(
+      const count = await conn.withRetry(id => api.dbExportDataSql(
         id, conn.currentDatabase, table, path,
         opts.withDrop !== false, opts.withCreate !== false, opts.batchSize || 1000
       ));
@@ -170,7 +170,7 @@ export const useTableStore = defineStore('table', () => {
 
   function truncateTable(table) {
     return runMenuOp(
-      () => conn.withRetry(id => api.mysqlExecDdl(id, conn.currentDatabase, `TRUNCATE TABLE ${qi(table)};`)),
+      () => conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase, `TRUNCATE TABLE ${qi(table)};`)),
       `已清空表「${table}」`
     );
   }

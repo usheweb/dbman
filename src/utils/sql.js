@@ -4,6 +4,174 @@ import { format } from 'sql-formatter';
 
 export const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'LIMIT', 'OFFSET', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'SET', 'VALUES', 'INTO', 'AS', 'DISTINCT', 'HAVING', 'UNION', 'ALL', 'ANY', 'SOME', 'EXISTS', 'IN', 'NOT', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'TRUE', 'FALSE', 'ASC', 'DESC'];
 
+// ===== SQL 表名 / 字段名智能纠错：相似度 + 报错文案解析 + 标识符替换 =====
+
+// 编辑距离（含相邻字符换位的 Damerau 变体），用于相似度归一化
+function editDistance(a, b) {
+  const n = a.length, m = b.length;
+  if (!n) return m;
+  if (!m) return n;
+  const d = [];
+  for (let i = 0; i <= n; i++) { d.push(new Array(m + 1).fill(0)); d[i][0] = i; }
+  for (let j = 0; j <= m; j++) d[0][j] = j;
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[n][m];
+}
+
+// 归一化相似度：1 表示完全相同，0 表示毫不相干（大小写不敏感）
+export function similarRatio(a, b) {
+  const x = String(a == null ? '' : a).toLowerCase();
+  const y = String(b == null ? '' : b).toLowerCase();
+  if (!x && !y) return 1;
+  const max = Math.max(x.length, y.length);
+  if (!max) return 1;
+  return 1 - editDistance(x, y) / max;
+}
+
+// 从候选名称里按相似度降序挑出最接近 target 的若干个（过滤掉同名与低于阈值的）
+export function rankSimilar(target, names, limit = 8, threshold = 0.4) {
+  const key0 = String(target == null ? '' : target).toLowerCase();
+  const len0 = key0.length;
+  const seen = new Set();
+  const out = [];
+  for (const raw of names || []) {
+    const name = String(raw == null ? '' : raw);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key) || key === key0) continue;
+    seen.add(key);
+    const ratio = similarRatio(target, name);
+    if (ratio < threshold) continue;
+    out.push({ name, ratio });
+  }
+  // 同分时优先「长度与目标一致」的候选（多半只是一个字的错），再按长度、字典序
+  out.sort((p, q) =>
+    q.ratio - p.ratio ||
+    Math.abs(p.name.length - len0) - Math.abs(q.name.length - len0) ||
+    p.name.length - q.name.length ||
+    p.name.localeCompare(q.name));
+  return out.slice(0, limit);
+}
+
+// 拆掉库名/表前缀：db.tbl -> { db:'db', name:'tbl' }；顺带去掉反引号
+function splitQualified(raw) {
+  const parts = String(raw == null ? '' : raw).trim().split('.');
+  const clean = s => s.trim().replace(/^`|`$/g, '').replace(/`/g, '');
+  if (parts.length >= 2) return { db: clean(parts[0]) || null, name: clean(parts[parts.length - 1]) };
+  return { db: null, name: clean(parts[0]) };
+}
+
+// 各数据库「找不到表/字段」的报错文案 → 出错的标识符与类型
+// MySQL / MariaDB、PostgreSQL、SQLite、SQL Server、Oracle
+const NAME_ERROR_PATTERNS = [
+  { kind: 'table', re: /\bTable\s+'([^']+)'\s+doesn't exist/i },
+  { kind: 'table', re: /\bUnknown table\s+'([^']+)'/i },
+  { kind: 'column', re: /\bUnknown column\s+'([^']+)'/i },
+  { kind: 'table', re: /\brelation\s+(?:"[^"]+"\s*\.\s*)?"([^"]+)"\s+does not exist/i },
+  { kind: 'column', re: /\bcolumn\s+(?:"[^"]+"\s*\.\s*)?"([^"]+)"\s+does not exist/i },
+  { kind: 'table', re: /\bno such table:\s*([^\s'"]+)/i },
+  { kind: 'column', re: /\bno such column:\s*([^\s'"]+)/i },
+  { kind: 'table', re: /\bInvalid object name\s+'([^']+)'/i },
+  { kind: 'column', re: /\bInvalid column name\s+'([^']+)'/i },
+  { kind: 'column', re: /ORA-00904:\s*["']?([^"':]+)["']?\s*:/i }
+];
+
+// 从数据库报错文案里解析出「出错的表名 / 字段名」，解析不到返回 null
+export function parseSqlNameError(message) {
+  const msg = String(message == null ? '' : message);
+  if (!msg) return null;
+  for (const p of NAME_ERROR_PATTERNS) {
+    const m = msg.match(p.re);
+    if (!m) continue;
+    const info = splitQualified(m[1]);
+    if (!info.name) continue;
+    return { kind: p.kind, name: info.name, db: info.db };
+  }
+  return null;
+}
+
+// 从 SQL 里提取引用的表名（FROM / JOIN / UPDATE / INTO），去重并去掉库名前缀
+export function queryTableNames(sql) {
+  const cleaned = String(sql == null ? '' : sql)
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n\r]*/g, ' ')
+    .replace(/#[^\n\r]*/g, ' ')
+    .replace(/'(?:[^'\\]|\\.|'')*'/g, "''")
+    .replace(/"(?:[^"\\]|\\.|"")*"/g, '""');
+  const re = /\b(?:from|join|update|into)\s+((?:`(?:[^`]|``)+`|[A-Za-z_$][\w$]*)(?:\s*\.\s*(?:`(?:[^`]|``)+`|[A-Za-z_$][\w$]*))?)/gi;
+  const out = [];
+  const seen = new Set();
+  let m;
+  while ((m = re.exec(cleaned)) !== null) {
+    const name = splitQualified(m[1].replace(/``/g, '`')).name;
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+// 把 SQL 中出现的标识符 from 替换为 to（补反引号）；字符串字面量与注释里的内容不动
+export function replaceIdent(sql, from, to) {
+  const src = String(sql == null ? '' : sql);
+  const target = String(from == null ? '' : from);
+  if (!target) return src;
+  const lower = target.toLowerCase();
+  const repl = sqlIdent(to);
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    const two = src.slice(i, i + 2);
+    if (two === '/*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out += src.slice(i, stop); i = stop; continue;
+    }
+    if (two === '--' || ch === '#') {
+      let stop = i;
+      while (stop < src.length && src[stop] !== '\n' && src[stop] !== '\r') stop++;
+      out += src.slice(i, stop); i = stop; continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === '\\' && ch !== '`') { j += 2; continue; }
+        if (src[j] === ch) {
+          j++;
+          if (src[j] === ch) { j++; continue; }
+          break;
+        }
+        j++;
+      }
+      const seg = src.slice(i, j);
+      if (ch === '`') {
+        const inner = (seg.endsWith('`') ? seg.slice(1, -1) : seg.slice(1)).split('``').join('`');
+        if (inner.toLowerCase() === lower) { out += repl; i = j; continue; }
+      }
+      out += seg; i = j; continue;
+    }
+    const m = src.slice(i).match(/^[A-Za-z_$@][\w$@]*/);
+    if (m) {
+      out += m[0].toLowerCase() === lower ? repl : m[0];
+      i += m[0].length;
+      continue;
+    }
+    out += ch; i++;
+  }
+  return out;
+}
+
 // 模糊匹配打分：前缀 > 子串 > 顺序子序列；完全不匹配返回 -1
 export function fuzzyScore(text, query) {
   const t = String(text).toLowerCase();

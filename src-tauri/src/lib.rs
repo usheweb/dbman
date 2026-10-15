@@ -1,17 +1,15 @@
 mod csv_import;
+mod db;
 mod llm;
 mod models;
-mod mysql;
 mod redis_cmd;
 mod ssh;
 mod state;
 mod store;
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{Manager, State};
-use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 use models::ConnectRequest;
@@ -58,24 +56,27 @@ fn generate_id() -> String {
 #[tauri::command]
 async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<String, String> {
     let db_type = payload.r#type.clone();
-    if db_type != "mysql" && db_type != "redis" {
+    let is_redis = db_type == "redis";
+    if !is_redis && !db::is_relational(&db_type) {
         return Err("Unsupported database type".to_string());
     }
 
     let conn_id = generate_id();
     let ssh_cfg = payload.ssh.clone().unwrap_or_default();
+    // 本地文件型数据库（如 SQLite）无主机/端口，也不需要 SSH 隧道。
+    let is_file_based = db::is_file_based(&db_type);
 
     // 用户填写的真实目标：SSH 模式下 host/port 会被换成本地转发地址，报错时仍展示真实目标
     let target_host = payload.config.host.clone();
     let target_port = payload
         .config
         .port
-        .unwrap_or_else(|| mysql::default_port(&db_type));
+        .unwrap_or_else(|| db::default_port(&db_type));
 
     let mut host = target_host.clone();
     let mut port = target_port;
 
-    if ssh_cfg.enabled {
+    if ssh_cfg.enabled && !is_file_based {
         let ssh_host = ssh_cfg.host.clone().unwrap_or_default();
         let ssh_port = ssh_cfg.port.unwrap_or(22);
         let tunnel = timeout(
@@ -90,11 +91,16 @@ async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<
         port = local_port;
     }
 
-    let connect_result = if db_type == "mysql" {
-        match timeout(CONNECT_TIMEOUT, mysql::connect(&payload.config, &host, port)).await {
-            Ok(Ok(conn)) => {
+    let connect_result = if !is_redis {
+        match timeout(
+            CONNECT_TIMEOUT,
+            db::connect_driver(&db_type, &payload.config, &host, port),
+        )
+        .await
+        {
+            Ok(Ok(driver)) => {
                 state
-                    .insert(conn_id.clone(), DbConn::Mysql(Arc::new(Mutex::new(conn))))
+                    .insert(conn_id.clone(), DbConn::Relational(driver))
                     .await;
                 Ok(())
             }
@@ -127,19 +133,8 @@ async fn disconnect(state: State<'_, AppState>, conn_id: String) -> Result<(), S
     // 移除隧道（Tunnel 的 Drop 会 abort SSH 会话）
     state.tunnels.lock().await.remove(&conn_id);
 
-    let conn = state.connections.lock().await.remove(&conn_id);
-    match conn {
-        Some(DbConn::Mysql(conn)) => {
-            if let Ok(mutex) = Arc::try_unwrap(conn) {
-                let conn = mutex.into_inner();
-                let _ = conn.disconnect().await;
-            }
-        }
-        Some(DbConn::Redis(_cm)) => {
-            // ConnectionManager 直接 drop 即可关闭
-        }
-        None => {}
-    }
+    // 驱动 / ConnectionManager 直接 drop 即可关闭连接
+    state.connections.lock().await.remove(&conn_id);
     Ok(())
 }
 
@@ -180,17 +175,17 @@ pub fn run() {
             disconnect,
             write_text_file,
             read_text_file,
-            mysql::mysql_databases,
-            mysql::mysql_tables,
-            mysql::mysql_columns,
-            mysql::mysql_query,
-            mysql::mysql_export,
-            mysql::mysql_table_ddl,
-            mysql::mysql_table_structure,
-            mysql::mysql_export_data_sql,
-            mysql::mysql_exec_ddl,
+            db::db_databases,
+            db::db_tables,
+            db::db_columns,
+            db::db_query,
+            db::db_export,
+            db::db_table_ddl,
+            db::db_table_structure,
+            db::db_export_data_sql,
+            db::db_exec_script,
             csv_import::csv_preview,
-            csv_import::mysql_import_csv,
+            csv_import::db_import_csv,
             redis_cmd::redis_info,
             redis_cmd::redis_keys,
             redis_cmd::redis_get,

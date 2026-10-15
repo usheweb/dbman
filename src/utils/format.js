@@ -4,9 +4,17 @@ export function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
-// 本地日期键 YYYY-MM-DD：用于「今日不再提示」这类按天失效的标记
+// 本地日期键 YYYY-MM-DD：用于「N 天内不再提示」这类按天失效的标记
 export function todayKey() {
   const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// 今天往后 days 天的日期键。推广弹窗记「到期日」而不是「勾选日」，
+// 判断时直接拿 todayKey() <= 到期日 做字符串比较（YYYY-MM-DD 字典序即时间序）
+export function dayKeyAfter(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 

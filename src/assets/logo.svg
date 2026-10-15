@@ -1,45 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="DBMan">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="46%" r="66%">
-      <stop offset="0%" stop-color="#12657F"/>
-      <stop offset="62%" stop-color="#0A3F58"/>
-      <stop offset="100%" stop-color="#06182A"/>
-    </radialGradient>
-    <linearGradient id="cyl" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#57CBEE"/>
-      <stop offset="100%" stop-color="#2A80BC"/>
+    <!-- 底色渐变：左上青 → 右下紫（沿用现用蓝底） -->
+    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="31" y1="31" x2="377" y2="550">
+      <stop offset="0%" stop-color="#5BC9F3"/>
+      <stop offset="100%" stop-color="#725AF5"/>
     </linearGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="#9BDF9B"/>
-      <stop offset="100%" stop-color="#5FAD66"/>
-    </linearGradient>
-    <clipPath id="bodyClip">
-      <path d="M150 170 L150 322 C150 343 197 360 256 360 C315 360 362 343 362 322 L362 170 Z"/>
-    </clipPath>
+    <!-- 光晕遮罩：小圆挖掉一个更大的偏移圆 → 右上平滑月牙（尖端与底盘外缘齐平，无尖刺） -->
+    <mask id="halo">
+      <rect width="512" height="512" fill="#000000"/>
+      <circle cx="256" cy="256" r="75" fill="#FFFFFF"/>
+      <circle cx="233.6" cy="304" r="114" fill="#000000"/>
+    </mask>
   </defs>
 
-  <!-- 背景 -->
+  <!-- 外框：圆角方形 -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
 
-  <!-- 装饰环 + 光点 -->
-  <circle cx="256" cy="252" r="178" fill="none" stroke="#9FE9FF" stroke-width="4" opacity="0.12"/>
-  <circle cx="118" cy="150" r="9" fill="#CFEFFF" opacity="0.18"/>
-  <circle cx="404" cy="128" r="6" fill="#CFEFFF" opacity="0.16"/>
-  <circle cx="418" cy="330" r="11" fill="#F2C94C" opacity="0.85"/>
-  <circle cx="104" cy="352" r="8" fill="#B79CE8" opacity="0.8"/>
+  <!-- 轨道：被 4 个数据库节点打断的断环（4 段弧，缺口 38° / 弧段 52°） -->
+  <path d="M207.8 395.9 A148 148 0 0 1 116.1 304.2" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+  <path d="M116.1 207.8 A148 148 0 0 1 207.8 116.1" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+  <path d="M304.2 116.1 A148 148 0 0 1 395.9 207.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+  <path d="M395.9 304.2 A148 148 0 0 1 304.2 395.9" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
 
-  <!-- 茎 -->
-  <path d="M256 128 L256 104" stroke="#6E9463" stroke-width="12" stroke-linecap="round"/>
+  <!-- 正下：圆柱 = 关系型（MySQL / PostgreSQL / Oracle） -->
+  <path d="M231 404 v30 a25 10 0 0 0 50 0 v-30 z" fill="#FFFFFF"/>
+  <ellipse cx="256" cy="404" rx="25" ry="10" fill="#DFEEFB"/>
 
-  <!-- 叶子 -->
-  <ellipse cx="300" cy="104" rx="42" ry="21" fill="url(#leaf)" transform="rotate(-26 300 104)"/>
-  <ellipse cx="212" cy="100" rx="40" ry="20" fill="#6FBB70" transform="rotate(28 212 100)"/>
+  <!-- 正左：六边形 = 宽列 / 分布式（Cassandra / HBase） -->
+  <polygon points="108,229 131.4,242.5 131.4,269.5 108,283 84.6,269.5 84.6,242.5" fill="#FFFFFF"/>
 
-  <!-- 数据库圆柱（"数据果实"） -->
-  <path d="M150 170 L150 322 C150 343 197 360 256 360 C315 360 362 343 362 322 L362 170 Z" fill="url(#cyl)"/>
-  <ellipse cx="256" cy="340" rx="96" ry="30" fill="#0F4A72" opacity="0.25" clip-path="url(#bodyClip)"/>
-  <ellipse cx="256" cy="170" rx="106" ry="38" fill="#7FE8FA"/>
-  <ellipse cx="212" cy="158" rx="38" ry="14" fill="#FFFFFF" opacity="0.32" transform="rotate(-10 212 158)"/>
-  <path d="M150 222 C150 243 197 260 256 260 C315 260 362 243 362 222" fill="none" stroke="#A9EFFF" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
-  <path d="M150 274 C150 295 197 312 256 312 C315 312 362 295 362 274" fill="none" stroke="#A9EFFF" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
+  <!-- 正上：叶子 = 文档型（MongoDB） -->
+  <path d="M256 80 C282 92 282 124 256 136 C230 124 230 92 256 80 Z" fill="#FFFFFF"/>
+
+  <!-- 正右：堆叠板 = 键值 / 缓存（Redis / Memcached） -->
+  <rect x="378" y="232.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
+  <rect x="378" y="249.5" width="52" height="13" rx="4" fill="#DFEEFB"/>
+  <rect x="378" y="266.5" width="52" height="13" rx="4" fill="#FFFFFF"/>
+
+  <!-- 品牌机器人：原样完整保留（黑色头部 / 浅蓝双眼 / 两侧耳环 / 浅蓝光晕底盘） -->
+  <circle cx="256" cy="256" r="75" fill="#ACE0F9"/>
+  <circle cx="256" cy="256" r="75" fill="#E9F6FE" mask="url(#halo)"/>
+  <ellipse cx="182.4" cy="261.4" rx="15.4" ry="25.5" fill="#000000"/>
+  <ellipse cx="182.4" cy="261.4" rx="8.5" ry="18.6" fill="#ACE0F9"/>
+  <ellipse cx="329.6" cy="261.4" rx="15.4" ry="25.5" fill="#000000"/>
+  <ellipse cx="329.6" cy="261.4" rx="8.5" ry="18.6" fill="#ACE0F9"/>
+  <circle cx="256" cy="256" r="52" fill="#000000"/>
+  <ellipse cx="236.7" cy="244" rx="6.8" ry="14" fill="#ACE0F9"/>
+  <ellipse cx="275.3" cy="244" rx="6.8" ry="14" fill="#ACE0F9"/>
 </svg>

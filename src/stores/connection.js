@@ -6,6 +6,7 @@ import * as api from '@/api';
 import { useStoreStore } from './store';
 import { useUiStore } from './ui';
 import { generateId } from '@/utils/format';
+import { isRelational } from '@/utils/dbType';
 
 // 句柄失效的精确文案，与 Rust 后端保持一致，用于触发静默重连
 const INVALID_CONN = 'Invalid connection';
@@ -198,8 +199,9 @@ export const useConnectionStore = defineStore('connection', () => {
         return;
       }
       s.serverConnId = sid;
-      ui.showToast('已连接：' + conn.name, 'success');
-      if (conn.type === 'mysql') await loadMySQLDatabasesFor(connId);
+      // 连接成功不再弹提示：左侧库表列表加载出来本身就是成功的信号
+      if (isRelational(conn.type)) await loadMySQLDatabasesFor(connId);
+      else if (conn.type === 'redis') await loadRedisDatabasesFor(connId);
     } catch (err) {
       ui.showToast('连接失败：' + String(err), 'error');
       // 回滚这个 tab
@@ -254,7 +256,7 @@ export const useConnectionStore = defineStore('connection', () => {
   async function loadMySQLDatabasesFor(connId) {
     const s = sessions.value[connId];
     if (!s) return;
-    const data = await withRetryFor(s, id => api.mysqlDatabases(id));
+    const data = await withRetryFor(s, id => api.dbDatabases(id));
     s.databaseList = data;
     // 只有「记住的上次选择」仍然存在时才自动打开它。
     // 该连接首次使用（或记忆中的库已被删除）时不做任何默认选中。
@@ -266,16 +268,35 @@ export const useConnectionStore = defineStore('connection', () => {
     return loadMySQLDatabasesFor(activeId.value);
   }
 
+  // Redis 的逻辑库：按 CONFIG GET databases 拿到的数量列出 DB 0 ~ n-1。
+  // 连接本身就是按配置里的 db 建立的，这里先把选中的库同步成「记忆里的库 / 配置里的库」
+  async function loadRedisDatabasesFor(connId) {
+    const s = sessions.value[connId];
+    if (!s) return;
+    let n = 16;
+    try {
+      n = await withRetryFor(s, id => api.redisDatabases(id));
+    } catch (e) { n = 16; }
+    const list = Array.from({ length: n }, (_, i) => String(i));
+    s.databaseList = list;
+    const last = connectionDatabases.value[connId];
+    const want = list.includes(last) ? last : String(s.connData.db ?? 0);
+    await selectDatabaseFor(connId, list.includes(want) ? want : '0');
+  }
+
   async function selectDatabaseFor(connId, db) {
     const s = sessions.value[connId];
     if (!s) return;
-    const changed = db !== s.database;
     s.database = db;
     s.table = null;
     saveConnectionDatabase(connId, db);
+    // Redis 没有表结构：切库就是在该连接上执行 SELECT，key 列表由右侧面板重新拉
+    if (s.connData.type === 'redis') {
+      await withRetryFor(s, id => api.redisSelectDb(id, Number(db)));
+      return;
+    }
+    // 选中库后不再自动收起连接列，避免页面跳动突兀；是否隐藏交给用户点面板上的收起按钮
     await loadTablesFor(connId, db);
-    // 右边表列表出来了，自动收起连接列腾出空间
-    if (changed && activeId.value === connId) ui.setPanel('sidebar', true);
   }
 
   function selectDatabase(db) {
@@ -285,7 +306,7 @@ export const useConnectionStore = defineStore('connection', () => {
   async function loadTablesFor(connId, db) {
     const s = sessions.value[connId];
     if (!s) return;
-    const data = await withRetryFor(s, id => api.mysqlTables(id, db, null));
+    const data = await withRetryFor(s, id => api.dbTables(id, db, null));
     s.allTables = data;
   }
 
@@ -298,7 +319,7 @@ export const useConnectionStore = defineStore('connection', () => {
     const s = sessions.value[connId];
     if (!s) return;
     try {
-      const data = await withRetryFor(s, id => api.mysqlColumns(id, db, table));
+      const data = await withRetryFor(s, id => api.dbColumns(id, db, table));
       s.tableColumns = { ...s.tableColumns, [table]: data };
     } catch (e) {
       /* 拿不到列信息不阻塞主流程 */

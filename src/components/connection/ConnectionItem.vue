@@ -13,6 +13,20 @@ const connStore = useConnectionStore();
 const ui = useUiStore();
 
 const isActive = computed(() => props.conn.id === connStore.currentConnId);
+// Redis 的「库」是逻辑库序号：列表里显示成 DB 0 / DB 1，避免光看数字不知所云
+const isRedis = computed(() => props.conn.type === 'redis');
+
+// 库列表的展开/收起：点击已选中的连接卡片即切换，点别的连接则选中它并展开
+const collapsed = ref(false);
+
+function onItemClick() {
+  if (isActive.value) {
+    collapsed.value = !collapsed.value;
+    return;
+  }
+  collapsed.value = false;
+  connStore.selectConnection(props.conn.id);
+}
 
 const menuVisible = ref(false);
 const menuX = ref(0);
@@ -48,7 +62,7 @@ function onMenuSelect(item) {
   <div
     class="connection-item"
     :class="{ active: isActive }"
-    @click="connStore.selectConnection(conn.id)"
+    @click="onItemClick"
     @contextmenu.prevent="onContextMenu"
   >
     <div class="connection-head">
@@ -57,9 +71,14 @@ function onMenuSelect(item) {
         <ItemIcon :name="conn.type" />
         {{ conn.type.toUpperCase() }}
       </span>
+      <span v-if="isActive" class="conn-caret" :class="{ collapsed }">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </span>
     </div>
     <div class="connection-type">{{ conn.host }}:{{ conn.port }}</div>
-    <div v-if="isActive" class="database-list show">
+    <div v-if="isActive" class="database-list" :class="{ show: !collapsed }">
       <div
         v-for="db in connStore.currentDatabaseList"
         :key="db"
@@ -68,7 +87,7 @@ function onMenuSelect(item) {
         @click.stop="connStore.selectDatabase(db)"
       >
         <ItemIcon name="database" />
-        <span class="item-label">{{ db }}</span>
+        <span class="item-label">{{ isRedis ? 'DB ' + db : db }}</span>
       </div>
     </div>
     <ContextMenu
