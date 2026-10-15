@@ -121,15 +121,14 @@ export const useConnectionStore = defineStore('connection', () => {
   // 钥匙串不可用时原样保留明文（降级），不影响使用
   async function migrateConnSecrets(conn) {
     const ssh = conn.ssh || {};
-    if (!conn.password && !ssh.password && !ssh.privateKey) return;
-    const ok = await saveSecretsFor(conn.id, {
-      password: conn.password,
-      sshPassword: ssh.password,
-      sshKey: ssh.privateKey
-    });
+    const secrets = { password: conn.password, sshPassword: ssh.password, sshKey: ssh.privateKey };
+    if (!secrets.password && !secrets.sshPassword && !secrets.sshKey) return;
+    const ok = await saveSecretsFor(conn.id, secrets);
     if (!ok) return;
     delete conn.password;
     if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
+    // 记下哪几处秘密已在钥匙串里：编辑弹窗据此显示「已保存」占位符，不必去读钥匙串
+    conn.secretFields = Object.keys(secrets).filter(k => secrets[k]);
     saveConnections();
   }
 
@@ -144,6 +143,7 @@ export const useConnectionStore = defineStore('connection', () => {
       }
       delete conn.password;
       if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
+      delete conn.secretFields;
     }
     secretsCache.value = {};
     saveConnections();

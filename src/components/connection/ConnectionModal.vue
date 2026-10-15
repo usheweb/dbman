@@ -72,9 +72,14 @@ const form = reactive({
   sshKey: ''
 });
 
+// 已保存的秘密在这里用占位符表示。编辑连接时刻意不去读系统钥匙串（读别人的条目会弹授权框），
+// 只按连接上的 secretFields 标记显示占位符；保存时若占位符原样保留，就完全不碰钥匙串
+const SECRET_KEEP = '••••••••••';
+const SECRET_KEYS = ['password', 'sshPassword', 'sshKey'];
+
 // 用编辑目标（或新建时的默认值）填充表单。
-// 密码 / SSH 密码 / SSH 私钥不随连接对象落盘，编辑时从系统钥匙串取回来
-async function fillForm() {
+// 密码 / SSH 密码 / SSH 私钥不随连接对象落盘；已进钥匙串的用占位符提示，钥匙串不可用时是明文残留
+function fillForm() {
   const conn = ui.connModalTarget;
   form.name = conn ? conn.name : '';
   form.type = conn ? conn.type : 'mysql';
@@ -87,21 +92,18 @@ async function fillForm() {
   form.sshHost = (conn && conn.ssh && conn.ssh.host) || '';
   form.sshPort = (conn && conn.ssh && conn.ssh.port) || 22;
   form.sshUser = (conn && conn.ssh && conn.ssh.username) || '';
-  // 秘密字段先按降级模式下留在连接里的明文回填，再用钥匙串里的值覆盖
-  form.password = (conn && conn.password) || '';
-  form.sshPassword = (conn && conn.ssh && conn.ssh.password) || '';
-  form.sshKey = (conn && conn.ssh && conn.ssh.privateKey) || '';
-  if (!conn) return;
-  const sec = await connStore.loadSecretsFor(conn.id);
-  if (sec.password) form.password = sec.password;
-  if (sec.sshPassword) form.sshPassword = sec.sshPassword;
-  if (sec.sshKey) form.sshKey = sec.sshKey;
+  // 秘密字段：降级模式下连接里还留着明文，直接回填真值；反之按标记填占位符
+  const fields = (conn && conn.secretFields) || [];
+  const keep = name => (fields.includes(name) ? SECRET_KEEP : '');
+  form.password = (conn && conn.password) || keep('password');
+  form.sshPassword = (conn && conn.ssh && conn.ssh.password) || keep('sshPassword');
+  form.sshKey = (conn && conn.ssh && conn.ssh.privateKey) || keep('sshKey');
 }
 
 watch(
   () => [ui.modals.connectionModal, ui.connModalTarget],
-  async () => {
-    if (ui.modals.connectionModal) await fillForm();
+  () => {
+    if (ui.modals.connectionModal) fillForm();
   }
 );
 
@@ -112,38 +114,53 @@ function onTypeChange(type) {
   form.type = type;
 }
 
-// useKeyring=true：秘密已进钥匙串，落盘的配置里不带密码与私钥
-function buildSsh(useKeyring) {
-  const ssh = {
+// 表单三处秘密的原始值；SSH 关掉时两个 SSH 字段视为「清空」
+function rawSecrets() {
+  return {
+    password: form.password,
+    sshPassword: form.useSsh ? form.sshPassword : '',
+    sshKey: form.useSsh ? form.sshKey : ''
+  };
+}
+
+// 解析秘密字段：占位符表示「沿用已保存的密码」，此时才去钥匙串把旧值取回来
+async function resolveSecrets(raw) {
+  const prev = ui.connModalTarget;
+  const needOld = prev && SECRET_KEYS.some(k => raw[k] === SECRET_KEEP);
+  const old = needOld ? await connStore.loadSecretsFor(prev.id) : {};
+  const out = {};
+  for (const k of SECRET_KEYS) out[k] = raw[k] === SECRET_KEEP ? (old[k] || '') : raw[k];
+  return out;
+}
+
+function sshConfig(sec) {
+  return {
     enabled: true,
     host: form.sshHost,
     port: Number(form.sshPort),
     username: form.sshUser,
-    password: form.sshPassword,
-    privateKey: form.sshKey
+    password: sec.sshPassword,
+    privateKey: sec.sshKey
   };
-  if (useKeyring) {
-    delete ssh.password;
-    delete ssh.privateKey;
-  }
-  return ssh;
 }
 
 // 与 getConnectionConfig 完全一致：关系型用 database，redis 用 db
 // （MongoDB 的 database 表示认证库，与关系型同字段）
-function buildPayload() {
+// sec 为解析后的秘密值；不传时直接用表单里的值（新建连接、没有占位符时）
+function buildPayload(sec) {
+  const s = sec || { password: form.password, sshPassword: form.sshPassword, sshKey: form.sshKey };
   const config = {
     host: form.host,
     port: Number(form.port),
     user: form.user,
-    password: form.password
+    password: s.password
   };
   if (hasDbField(form.type)) config.database = form.database;
   else config.db = Number(form.db);
   return {
     type: form.type,
     config,
-    ssh: form.useSsh ? buildSsh() : { enabled: false }
+    ssh: form.useSsh ? sshConfig(s) : { enabled: false }
   };
 }
 
@@ -169,7 +186,8 @@ function validate() {
 async function onTest() {
   if (!validate()) return;
   try {
-    await connStore.testConnection(buildPayload());
+    // 占位符不是真密码：测试前得先把「沿用」的字段还原成钥匙串里的旧值
+    await connStore.testConnection(buildPayload(await resolveSecrets(rawSecrets())));
     ui.showToast('连接成功！', 'success');
   } catch (err) {
     ui.showToast('连接失败：' + String(err), 'error');
@@ -178,13 +196,35 @@ async function onTest() {
 
 async function onSave() {
   if (!validate()) return;
-  const id = ui.connModalTarget ? ui.connModalTarget.id : connStore.newConnectionId();
-  // 密码 / SSH 密码 / SSH 私钥写进系统钥匙串；钥匙串不可用时降级为明文落盘，功能不受影响
-  const inKeyring = await connStore.saveSecretsFor(id, {
-    password: form.password,
-    sshPassword: form.sshPassword,
-    sshKey: form.sshKey
-  });
+  const prev = ui.connModalTarget;
+  const id = prev ? prev.id : connStore.newConnectionId();
+  const raw = rawSecrets();
+
+  // 三处秘密全是占位符：用户根本没动秘密字段 → 不读也不写钥匙串，原样保留
+  const untouched = !!prev && SECRET_KEYS.every(k => raw[k] === SECRET_KEEP);
+
+  let inKeyring = true;                                       // 秘密是否在钥匙串里（false = 降级为明文落盘）
+  let secretFields = (prev && prev.secretFields) || [];
+  let plain = null;                                           // 降级模式下要落盘的明文
+
+  if (!untouched) {
+    const old = prev ? await connStore.loadSecretsFor(id) : {};
+    const next = {};
+    for (const k of SECRET_KEYS) next[k] = raw[k] === SECRET_KEEP ? (old[k] || '') : raw[k];
+    if (prev && SECRET_KEYS.every(k => (old[k] || '') === next[k])) {
+      // 结果与钥匙串里已有的完全一致：不覆盖写（覆盖已有条目会弹系统授权框）
+      secretFields = SECRET_KEYS.filter(k => next[k]);
+    } else if (await connStore.saveSecretsFor(id, next)) {
+      // 密码 / SSH 密码 / SSH 私钥写进系统钥匙串，落盘的连接里不带秘密
+      secretFields = SECRET_KEYS.filter(k => next[k]);
+    } else {
+      // 钥匙串不可用（如 debug 构建）：降级为明文落盘，功能不受影响
+      inKeyring = false;
+      secretFields = [];
+      plain = next;
+    }
+  }
+
   connStore.upsertConnection({
     id,
     name: form.name,
@@ -192,13 +232,23 @@ async function onSave() {
     host: form.host,
     port: Number(form.port),
     user: form.user,
-    password: inKeyring ? undefined : form.password,
+    password: plain ? plain.password : undefined,
     database: form.database,
     db: Number(form.db),
-    ssh: form.useSsh ? buildSsh(inKeyring) : null
+    ssh: form.useSsh
+      ? {
+          enabled: true,
+          host: form.sshHost,
+          port: Number(form.sshPort),
+          username: form.sshUser,
+          password: plain ? plain.sshPassword : undefined,
+          privateKey: plain ? plain.sshKey : undefined
+        }
+      : null,
+    secretFields
   });
   ui.closeModal('connectionModal');
-  ui.showToast(inKeyring ? '连接已保存，密码已存入系统钥匙串' : '连接已保存');
+  ui.showToast(inKeyring && secretFields.length ? '连接已保存，密码已存入系统钥匙串' : '连接已保存');
 }
 </script>
 
@@ -242,6 +292,7 @@ async function onSave() {
           <div class="form-group">
             <label>密码</label>
             <input type="password" v-model="form.password">
+            <div v-if="form.password === SECRET_KEEP" class="secret-hint">已保存密码（圆点为占位）：保持不变＝沿用原密码，清空＝删除密码</div>
           </div>
         </div>
         <div class="form-group" v-show="hasDbField(form.type)">
@@ -281,11 +332,13 @@ async function onSave() {
             <div class="form-group">
               <label>SSH密码</label>
               <input type="password" v-model="form.sshPassword">
+              <div v-if="form.sshPassword === SECRET_KEEP" class="secret-hint">已保存密码（圆点为占位）：保持不变＝沿用原密码，清空＝删除密码</div>
             </div>
           </div>
           <div class="form-group">
             <label>SSH私钥（可选）</label>
             <textarea autocapitalize="off" autocorrect="off" spellcheck="false" v-model="form.sshKey" rows="4"></textarea>
+            <div v-if="form.sshKey === SECRET_KEEP" class="secret-hint">已保存私钥（圆点为占位）：保持不变＝沿用原私钥，清空＝删除私钥</div>
           </div>
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -298,3 +351,24 @@ async function onSave() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 「已保存密码」提示：用绿色 + 前置圆点，比灰色小字更显眼，避免用户误以为密码丢了又重新填一遍 */
+.secret-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--green);
+}
+
+.secret-hint::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 2px;
+}
+</style>
