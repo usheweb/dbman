@@ -101,6 +101,61 @@ export const useAiStore = defineStore('ai', () => {
     bindProgress();
   }
 
+  // ===== apiKey 存系统钥匙串 =====
+  const AI_SECRET_ACCOUNT = 'ai-config';
+  // 钥匙串不可用时置 false：apiKey 退回文件里明文保存，保证功能可用
+  let keyringOk = true;
+
+  // 启动引导：apiKey 优先从钥匙串取；旧版本明文存在文件里则搬过去并抹掉原文
+  async function initSecret() {
+    const plain = config.value.apiKey || '';
+    try {
+      const stored = await api.secretGet(AI_SECRET_ACCOUNT);
+      keyringOk = true;
+      if (stored) {
+        config.value.apiKey = stored;
+        if (plain) writeConfig(); // 文件里还有明文残留，抹掉
+      } else if (plain) {
+        await api.secretSet(AI_SECRET_ACCOUNT, plain);
+        writeConfig();
+      }
+    } catch (e) {
+      keyringOk = false;
+      config.value.apiKey = plain;
+    }
+  }
+
+  // 落盘：钥匙串可用时配置文件里不留 apiKey
+  function writeConfig() {
+    if (keyringOk) {
+      const { apiKey, ...rest } = config.value;
+      store.set('dbman_ai_config', rest);
+    } else {
+      store.set('dbman_ai_config', { ...config.value });
+    }
+  }
+
+  function saveConfig(next) {
+    config.value = { ...DEFAULT_AI_CONFIG, ...(next || config.value) };
+    if (!keyringOk) {
+      writeConfig();
+      return;
+    }
+    api.secretSet(AI_SECRET_ACCOUNT, config.value.apiKey)
+      .then(writeConfig)
+      .catch(() => { keyringOk = false; writeConfig(); });
+  }
+
+  // 清除钥匙串里的 apiKey（设置菜单「清除已保存的密码」用）
+  async function purgeSecret() {
+    try {
+      await api.secretDelete(AI_SECRET_ACCOUNT);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // 监听 Rust 侧 `ai:progress`：step 追加一条步骤，thinking 更新当前阶段
   let binding = null;
   function bindProgress() {
@@ -239,7 +294,8 @@ export const useAiStore = defineStore('ai', () => {
   return {
     config, generating, status, error, prompt, steps, phase, phaseRound, lastUsage,
     hasSession, turn,
-    init, isConfigured, saveConfig, testConfig, generate, clearSteps, reset,
+    init, initSecret, purgeSecret,
+    isConfigured, saveConfig, testConfig, generate, clearSteps, reset,
     saveTabState, loadTabState, dropTabState
   };
 });

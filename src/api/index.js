@@ -132,6 +132,21 @@ export function storeSet(key, value) {
   return invoke('store_set', { key, value });
 }
 
+// ===== 系统钥匙串（密码等秘密不进 connections.json）=====
+// account 约定：连接用 `conn-<连接id>`，AI 配置用 `ai-config`
+export function secretSet(account, value) {
+  return invoke('secret_set', { account, value });
+}
+
+// 没存过返回 null；钥匙串不可用会 reject，调用方据此降级为明文保存
+export function secretGet(account) {
+  return invoke('secret_get', { account });
+}
+
+export function secretDelete(account) {
+  return invoke('secret_delete', { account });
+}
+
 // 直接写文本文件（当前页导出用：数据已在前端内存里，不必再查一次库）
 export function writeTextFile(path, content) {
   return invoke('write_text_file', { path, content });
@@ -159,5 +174,5 @@ export function dbImportCsv(connId, database, table, path, mapping, options) {
   return invoke('db_import_csv', { connId, database, table, path, mapping, options });
 }
 
-// 文件对话框（导出 CSV 用 save，选择 SQL/CSV 文件用 open）
-export { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
+// 文件对话框（导出 CSV 用 save，选择 SQL/CSV 文件用 open）+ 原生确认框（危险操作二次确认）
+export { save as saveDialog, open as openDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog';

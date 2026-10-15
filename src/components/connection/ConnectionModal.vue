@@ -72,37 +72,36 @@ const form = reactive({
   sshKey: ''
 });
 
-// 用编辑目标（或新建时的默认值）填充表单
-function fillForm() {
+// 用编辑目标（或新建时的默认值）填充表单。
+// 密码 / SSH 密码 / SSH 私钥不随连接对象落盘，编辑时从系统钥匙串取回来
+async function fillForm() {
   const conn = ui.connModalTarget;
   form.name = conn ? conn.name : '';
   form.type = conn ? conn.type : 'mysql';
   form.host = conn ? conn.host : '';
   form.port = conn && conn.port ? conn.port : defaultPort(form.type);
   form.user = conn ? conn.user : '';
-  form.password = conn ? conn.password : '';
   form.database = conn ? (conn.database || '') : '';
   form.db = conn ? (conn.db || 0) : 0;
   form.useSsh = conn ? !!conn.ssh : false;
-  if (conn && conn.ssh) {
-    form.sshHost = conn.ssh.host || '';
-    form.sshPort = conn.ssh.port || 22;
-    form.sshUser = conn.ssh.username || '';
-    form.sshPassword = conn.ssh.password || '';
-    form.sshKey = conn.ssh.privateKey || '';
-  } else {
-    form.sshHost = '';
-    form.sshPort = 22;
-    form.sshUser = '';
-    form.sshPassword = '';
-    form.sshKey = '';
-  }
+  form.sshHost = (conn && conn.ssh && conn.ssh.host) || '';
+  form.sshPort = (conn && conn.ssh && conn.ssh.port) || 22;
+  form.sshUser = (conn && conn.ssh && conn.ssh.username) || '';
+  // 秘密字段先按降级模式下留在连接里的明文回填，再用钥匙串里的值覆盖
+  form.password = (conn && conn.password) || '';
+  form.sshPassword = (conn && conn.ssh && conn.ssh.password) || '';
+  form.sshKey = (conn && conn.ssh && conn.ssh.privateKey) || '';
+  if (!conn) return;
+  const sec = await connStore.loadSecretsFor(conn.id);
+  if (sec.password) form.password = sec.password;
+  if (sec.sshPassword) form.sshPassword = sec.sshPassword;
+  if (sec.sshKey) form.sshKey = sec.sshKey;
 }
 
 watch(
   () => [ui.modals.connectionModal, ui.connModalTarget],
-  () => {
-    if (ui.modals.connectionModal) fillForm();
+  async () => {
+    if (ui.modals.connectionModal) await fillForm();
   }
 );
 
@@ -113,8 +112,9 @@ function onTypeChange(type) {
   form.type = type;
 }
 
-function buildSsh() {
-  return {
+// useKeyring=true：秘密已进钥匙串，落盘的配置里不带密码与私钥
+function buildSsh(useKeyring) {
+  const ssh = {
     enabled: true,
     host: form.sshHost,
     port: Number(form.sshPort),
@@ -122,6 +122,11 @@ function buildSsh() {
     password: form.sshPassword,
     privateKey: form.sshKey
   };
+  if (useKeyring) {
+    delete ssh.password;
+    delete ssh.privateKey;
+  }
+  return ssh;
 }
 
 // 与 getConnectionConfig 完全一致：关系型用 database，redis 用 db
@@ -171,9 +176,15 @@ async function onTest() {
   }
 }
 
-function onSave() {
+async function onSave() {
   if (!validate()) return;
   const id = ui.connModalTarget ? ui.connModalTarget.id : connStore.newConnectionId();
+  // 密码 / SSH 密码 / SSH 私钥写进系统钥匙串；钥匙串不可用时降级为明文落盘，功能不受影响
+  const inKeyring = await connStore.saveSecretsFor(id, {
+    password: form.password,
+    sshPassword: form.sshPassword,
+    sshKey: form.sshKey
+  });
   connStore.upsertConnection({
     id,
     name: form.name,
@@ -181,13 +192,13 @@ function onSave() {
     host: form.host,
     port: Number(form.port),
     user: form.user,
-    password: form.password,
+    password: inKeyring ? undefined : form.password,
     database: form.database,
     db: Number(form.db),
-    ssh: form.useSsh ? buildSsh() : null
+    ssh: form.useSsh ? buildSsh(inKeyring) : null
   });
   ui.closeModal('connectionModal');
-  ui.showToast('连接已保存');
+  ui.showToast(inKeyring ? '连接已保存，密码已存入系统钥匙串' : '连接已保存');
 }
 </script>
 

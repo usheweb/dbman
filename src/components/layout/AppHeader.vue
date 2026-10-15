@@ -2,13 +2,18 @@
 import { ref } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useThemeStore } from '@/stores/theme';
+import { useConnectionStore } from '@/stores/connection';
+import { useAiStore } from '@/stores/ai';
+import { confirmDialog } from '@/api';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import ConnectionTabs from '@/components/layout/ConnectionTabs.vue';
 
 const ui = useUiStore();
 const theme = useThemeStore();
+const connStore = useConnectionStore();
+const ai = useAiStore();
 
-// 「设置」菜单：AI 设置 / 视图设置
+// 「设置」菜单：AI 设置 / 视图设置 / 清除已保存的密码
 const settingsVisible = ref(false);
 const settingsBtnEl = ref(null);
 const settingsX = ref(0);
@@ -16,7 +21,9 @@ const settingsY = ref(0);
 
 const settingsItems = [
   { label: 'AI 设置', value: 'ai' },
-  { label: '视图设置', value: 'view' }
+  { label: '视图设置', value: 'view' },
+  { separator: true },
+  { label: '清除已保存的密码', value: 'purge-secrets', danger: true }
 ];
 
 function openSettingsMenu() {
@@ -32,11 +39,26 @@ function openSettingsMenu() {
   settingsVisible.value = true;
 }
 
-function onSettingsSelect(item) {
+async function onSettingsSelect(item) {
   settingsVisible.value = false;
   if (!item) return;
   if (item.value === 'ai') ui.openModal('aiConfigModal');
   else if (item.value === 'view') ui.openModal('viewSettingsModal');
+  else if (item.value === 'purge-secrets') await purgeSecrets();
+}
+
+// 清空系统钥匙串里 DBMan 保存的全部秘密（数据库密码、SSH 密码/私钥、AI apiKey）。
+// 连接配置本身保留，下次连接时重新输入密码即可
+async function purgeSecrets() {
+  const ok = await confirmDialog(
+    '将清除钥匙串中 DBMan 保存的全部密码：数据库密码、SSH 密码/私钥、AI apiKey。\n\n连接配置本身会保留，下次连接时需要重新输入密码。是否继续？',
+    { title: '清除已保存的密码', kind: 'warning' }
+  );
+  if (!ok) return;
+  const connOk = await connStore.purgeSecrets();
+  const aiOk = await ai.purgeSecret();
+  if (connOk && aiOk) ui.showToast('已清除全部已保存的密码', 'success');
+  else ui.showToast('部分凭据清除失败，请在系统钥匙串中手动删除', 'error');
 }
 </script>
 

@@ -4,6 +4,7 @@ mod llm;
 mod models;
 mod mongo_cmd;
 mod redis_cmd;
+mod secrets;
 mod ssh;
 mod state;
 mod store;
@@ -218,6 +219,9 @@ pub fn run() {
             llm::ai_test_config,
             store::store_load,
             store::store_set,
+            secrets::secret_set,
+            secrets::secret_get,
+            secrets::secret_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -111,25 +111,115 @@ export const useConnectionStore = defineStore('connection', () => {
     if (sessions.value[connId]) closeTab(connId);
     connections.value = connections.value.filter(c => c.id !== connId);
     saveConnections();
+    // 连接都删了，钥匙串里的密码一并清掉，避免留下游离条目
+    delete secretsCache.value[connId];
+    api.secretDelete(secretAccount(connId)).catch(() => { /* 本来没有或钥匙串不可用：忽略 */ });
+  }
+
+  // 启动迁移：旧版本把密码明文存在 connections.json 里，这里搬进钥匙串并抹掉原文；
+  // 钥匙串不可用时原样保留明文（降级），不影响使用
+  async function migrateSecretsToKeyring() {
+    let dirty = false;
+    for (const conn of connections.value) {
+      const ssh = conn.ssh || {};
+      if (!conn.password && !ssh.password && !ssh.privateKey) continue;
+      const ok = await saveSecretsFor(conn.id, {
+        password: conn.password,
+        sshPassword: ssh.password,
+        sshKey: ssh.privateKey
+      });
+      if (!ok) continue;
+      delete conn.password;
+      if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
+      dirty = true;
+    }
+    if (dirty) saveConnections();
+  }
+
+  // 清除全部已保存的密码：钥匙串条目 + 降级模式下的明文残留。连接本身保留
+  async function purgeSecrets() {
+    let allOk = true;
+    for (const conn of connections.value) {
+      try {
+        await api.secretDelete(secretAccount(conn.id));
+      } catch (e) {
+        allOk = false;
+      }
+      delete conn.password;
+      if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
+    }
+    secretsCache.value = {};
+    saveConnections();
+    return allOk;
   }
 
   function newConnectionId() {
     return generateId();
   }
 
-  // 统一构造后端 connect 需要的 payload
-  function buildConnectPayload(conn) {
+  // ===== 系统钥匙串里的秘密（密码 / SSH 密码 / SSH 私钥）=====
+  // 每次连接都读一次钥匙串会反复触发系统授权框，所以按连接缓存在内存里
+  const secretsCache = ref({}); // { [connId]: { password, sshPassword, sshKey } }
+
+  function secretAccount(connId) {
+    return `conn-${connId}`;
+  }
+
+  // 读一条连接的秘密；没存过或钥匙串不可用都返回空对象
+  async function loadSecretsFor(connId) {
+    if (secretsCache.value[connId]) return secretsCache.value[connId];
+    let blob = {};
+    try {
+      const raw = await api.secretGet(secretAccount(connId));
+      if (raw) blob = JSON.parse(raw) || {};
+    } catch (e) { /* 钥匙串不可用：按「没存过」处理 */ }
+    secretsCache.value[connId] = blob;
+    return blob;
+  }
+
+  // 写一条连接的秘密；返回 false 表示钥匙串不可用，调用方需降级为明文落盘
+  async function saveSecretsFor(connId, secrets) {
+    const clean = {
+      password: secrets.password || '',
+      sshPassword: secrets.sshPassword || '',
+      sshKey: secrets.sshKey || ''
+    };
+    try {
+      if (clean.password || clean.sshPassword || clean.sshKey) {
+        await api.secretSet(secretAccount(connId), JSON.stringify(clean));
+      } else {
+        await api.secretDelete(secretAccount(connId));
+      }
+    } catch (e) {
+      delete secretsCache.value[connId];
+      return false;
+    }
+    secretsCache.value[connId] = clean;
+    return true;
+  }
+
+  // 统一构造后端 connect 需要的 payload：密码优先取钥匙串，
+  // conn 上的 password / ssh.password / ssh.privateKey 只在钥匙串不可用的降级模式下才存在
+  async function buildConnectPayload(conn) {
+    const sec = await loadSecretsFor(conn.id);
+    const ssh = conn.ssh;
     return {
       type: conn.type,
       config: {
         host: conn.host,
         port: conn.port,
         user: conn.user,
-        password: conn.password,
+        password: sec.password || conn.password || '',
         database: conn.database,
         db: conn.db
       },
-      ssh: conn.ssh || { enabled: false }
+      ssh: ssh
+        ? {
+            ...ssh,
+            password: sec.sshPassword || ssh.password || '',
+            privateKey: sec.sshKey || ssh.privateKey || ''
+          }
+        : { enabled: false }
     };
   }
 
@@ -140,7 +230,7 @@ export const useConnectionStore = defineStore('connection', () => {
     if (running) return running;
     const p = (async () => {
       try {
-        const connId = await api.connect(buildConnectPayload(s.connData));
+        const connId = await api.connect(await buildConnectPayload(s.connData));
         // 重连期间会话可能已被关闭，避免写回已删除的会话
         if (sessions.value[s.connId]) s.serverConnId = connId;
         return true;
@@ -191,7 +281,7 @@ export const useConnectionStore = defineStore('connection', () => {
     tabOrder.value.push(connId);
     activeId.value = connId;
     try {
-      const sid = await api.connect(buildConnectPayload(conn));
+      const sid = await api.connect(await buildConnectPayload(conn));
       const s = sessions.value[connId];
       if (!s) {
         // 连接还在建立时用户已关掉该 tab
@@ -366,6 +456,10 @@ export const useConnectionStore = defineStore('connection', () => {
     removeConnection,
     newConnectionId,
     isOpen,
+    loadSecretsFor,
+    saveSecretsFor,
+    migrateSecretsToKeyring,
+    purgeSecrets,
     buildConnectPayload,
     reconnectServer,
     withRetry,
