@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "唐三浪DBMan",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "identifier": "com.tangsanlang.dbman",
   "build": {
     "frontendDist": "../dist",
