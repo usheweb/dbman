@@ -103,34 +103,41 @@ export const useAiStore = defineStore('ai', () => {
 
   // ===== apiKey 存系统钥匙串 =====
   const AI_SECRET_ACCOUNT = 'ai-config';
-  // 钥匙串不可用时置 false：apiKey 退回文件里明文保存，保证功能可用
+  // 钥匙串不可用时置 false，避免后续再做无意义的调用
   let keyringOk = true;
+  // 当前 config 里的 apiKey 是否已经存进钥匙串（决定能不能把它从配置文件里摘掉）。
+  // 初始 false：启动时绝不碰钥匙串，所以配置文件里的明文必须原样保留
+  let keyInKeyring = false;
 
-  // 启动引导：文件里的明文 apiKey 优先——写进钥匙串覆盖旧值后把明文抹掉，
-  // 与连接密码的迁移保持一致，避免钥匙串里的旧值盖掉 debug 期新填的 key。
-  // 文件里没有明文时，才取钥匙串里的值
-  async function initSecret() {
+  // 懒读钥匙串：只有真正要用 apiKey 时（测试连接 / 生成 SQL / 打开 AI 设置）才读，
+  // 这样「打开软件」不会弹系统授权框。首次读会弹一次，但此刻用户正在用 AI 功能，不突兀。
+  // 文件里遗留有明文（旧版本残留或 debug 期填的）时，按「明文优先」写进钥匙串再抹掉明文
+  async function ensureApiKey() {
+    if (keyInKeyring) return config.value.apiKey || '';
     const plain = config.value.apiKey || '';
     try {
       if (plain) {
         await api.secretSet(AI_SECRET_ACCOUNT, plain);
         keyringOk = true;
-        writeConfig();
-        return;
+        keyInKeyring = true;
+        writeConfig(); // 已确认写进钥匙串，此刻才把明文从配置里摘掉
+      } else {
+        const stored = await api.secretGet(AI_SECRET_ACCOUNT);
+        keyringOk = true;
+        keyInKeyring = true;
+        if (stored) config.value.apiKey = stored;
       }
-      const stored = await api.secretGet(AI_SECRET_ACCOUNT);
-      keyringOk = true;
-      if (stored) config.value.apiKey = stored;
     } catch (e) {
-      // 钥匙串不可用：明文继续留在文件里
+      // 钥匙串不可用：明文继续留在文件里，功能不受影响
       keyringOk = false;
       config.value.apiKey = plain;
     }
+    return config.value.apiKey || '';
   }
 
-  // 落盘：钥匙串可用时配置文件里不留 apiKey
+  // 落盘：只有确认 key 已经在钥匙串里，才把它从配置文件里摘掉
   function writeConfig() {
-    if (keyringOk) {
+    if (keyInKeyring) {
       const { apiKey, ...rest } = config.value;
       store.set('dbman_ai_config', rest);
     } else {
@@ -145,14 +152,22 @@ export const useAiStore = defineStore('ai', () => {
       return;
     }
     api.secretSet(AI_SECRET_ACCOUNT, config.value.apiKey)
-      .then(writeConfig)
-      .catch(() => { keyringOk = false; writeConfig(); });
+      .then(() => { keyInKeyring = true; writeConfig(); })
+      .catch(() => {
+        // 写不进去就退回明文保存，绝不能让用户填的 key 丢了
+        keyringOk = false;
+        keyInKeyring = false;
+        writeConfig();
+      });
   }
 
   // 清除钥匙串里的 apiKey（设置菜单「清除已保存的密码」用）
   async function purgeSecret() {
     try {
       await api.secretDelete(AI_SECRET_ACCOUNT);
+      config.value.apiKey = '';
+      keyInKeyring = false;
+      writeConfig();
       return true;
     } catch (e) {
       return false;
@@ -183,12 +198,9 @@ export const useAiStore = defineStore('ai', () => {
     return !!(config.value.baseUrl && config.value.apiKey && config.value.model);
   }
 
-  function saveConfig(next) {
-    config.value = { ...DEFAULT_AI_CONFIG, ...(next || config.value) };
-    store.set('dbman_ai_config', { ...config.value });
-  }
-
   async function testConfig(next) {
+    // 表单里带了 key 就用表单的；没带则先把钥匙串里的 key 读出来
+    if (!next || !next.apiKey) await ensureApiKey();
     await api.aiTestConfig({ ...DEFAULT_AI_CONFIG, ...(next || config.value) });
   }
 
@@ -200,6 +212,8 @@ export const useAiStore = defineStore('ai', () => {
       ui.showToast('请先描述你的查询需求', 'error');
       return false;
     }
+    // 此刻才去钥匙串取 key（打开软件时不读，避免启动就弹授权框）
+    await ensureApiKey();
     if (!isConfigured()) {
       ui.showToast('请先完成 AI 模型设置', 'error');
       ui.openModal('aiConfigModal');
@@ -297,7 +311,7 @@ export const useAiStore = defineStore('ai', () => {
   return {
     config, generating, status, error, prompt, steps, phase, phaseRound, lastUsage,
     hasSession, turn,
-    init, initSecret, purgeSecret,
+    init, ensureApiKey, purgeSecret,
     isConfigured, saveConfig, testConfig, generate, clearSteps, reset,
     saveTabState, loadTabState, dropTabState
   };

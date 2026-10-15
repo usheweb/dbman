@@ -96,9 +96,6 @@ onMounted(async () => {
   ws.init();
   sql.init();
   ai.init();
-  // 旧版本把密码明文写在本地文件里：启动时搬进系统钥匙串并抹掉原文（钥匙串不可用时自动保留明文）
-  await conn.migrateSecretsToKeyring();
-  await ai.initSecret();
   // 启动时没有任何连接中的数据库：展开「连接」面板，方便先选一个连接
   if (!conn.isConnected) ui.setPanel('sidebar', false);
   // 工作区执行完语句后要写 SQL 日志，这里做一次注入，避免 store 之间循环依赖

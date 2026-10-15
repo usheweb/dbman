@@ -13,8 +13,11 @@ const testing = ref(false);
 
 watch(
   () => ui.modals.aiConfigModal,
-  open => {
-    if (open) Object.assign(form, ai.config);
+  async open => {
+    if (!open) return;
+    // 打开设置时才去钥匙串取 apiKey 回填（启动时不读，避免开软件就弹授权框）
+    await ai.ensureApiKey();
+    Object.assign(form, ai.config);
   }
 );
 

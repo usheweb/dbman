@@ -116,24 +116,21 @@ export const useConnectionStore = defineStore('connection', () => {
     api.secretDelete(secretAccount(connId)).catch(() => { /* 本来没有或钥匙串不可用：忽略 */ });
   }
 
-  // 启动迁移：旧版本把密码明文存在 connections.json 里，这里搬进钥匙串并抹掉原文；
+  // 旧版本把密码明文存在 connections.json 里：用户点这条连接时，才把明文搬进钥匙串并抹掉原文。
+  // 放在连接时做（而不是启动时），是为了让「打开软件」不碰钥匙串、不弹系统授权框。
   // 钥匙串不可用时原样保留明文（降级），不影响使用
-  async function migrateSecretsToKeyring() {
-    let dirty = false;
-    for (const conn of connections.value) {
-      const ssh = conn.ssh || {};
-      if (!conn.password && !ssh.password && !ssh.privateKey) continue;
-      const ok = await saveSecretsFor(conn.id, {
-        password: conn.password,
-        sshPassword: ssh.password,
-        sshKey: ssh.privateKey
-      });
-      if (!ok) continue;
-      delete conn.password;
-      if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
-      dirty = true;
-    }
-    if (dirty) saveConnections();
+  async function migrateConnSecrets(conn) {
+    const ssh = conn.ssh || {};
+    if (!conn.password && !ssh.password && !ssh.privateKey) return;
+    const ok = await saveSecretsFor(conn.id, {
+      password: conn.password,
+      sshPassword: ssh.password,
+      sshKey: ssh.privateKey
+    });
+    if (!ok) return;
+    delete conn.password;
+    if (conn.ssh) { delete conn.ssh.password; delete conn.ssh.privateKey; }
+    saveConnections();
   }
 
   // 清除全部已保存的密码：钥匙串条目 + 降级模式下的明文残留。连接本身保留
@@ -277,6 +274,8 @@ export const useConnectionStore = defineStore('connection', () => {
     }
     const conn = connections.value.find(c => c.id === connId);
     if (!conn) return;
+    // 遗留的明文密码在这一刻才搬进钥匙串（启动时不动钥匙串，不弹授权框）
+    await migrateConnSecrets(conn);
     sessions.value[connId] = newSession(conn);
     tabOrder.value.push(connId);
     activeId.value = connId;
@@ -458,7 +457,7 @@ export const useConnectionStore = defineStore('connection', () => {
     isOpen,
     loadSecretsFor,
     saveSecretsFor,
-    migrateSecretsToKeyring,
+    migrateConnSecrets,
     purgeSecrets,
     buildConnectPayload,
     reconnectServer,
