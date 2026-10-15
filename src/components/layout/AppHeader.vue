@@ -44,7 +44,7 @@ function onSettingsSelect(item) {
   <div class="header">
     <div class="brand">
       <img class="brand-logo" src="@/assets/logo.svg" alt="">
-      <h1>DBMan</h1>
+      <h1>唐三浪DBMan</h1>
     </div>
     <ConnectionTabs />
     <div class="header-right">

@@ -1118,7 +1118,7 @@
             flex-direction: column;
             overflow: hidden;
         }
-        /* 顶部连接 Tab：位于导航栏内、与 DBMan 标题同一行；左侧留出 db-tree 的 12px 内边距，与下方列表对齐 */
+        /* 顶部连接 Tab：位于导航栏内、与 唐三浪DBMan 标题同一行；左侧留出 db-tree 的 12px 内边距，与下方列表对齐 */
         .conn-tabs {
             min-width: 0;
             display: flex;

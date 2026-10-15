@@ -1,4 +1,4 @@
-# DBMan
+# 唐三浪DBMan
 
 > 一款基于 **Tauri 2 + Rust + Vue 3** 的现代桌面数据库管理工具，把 MySQL 与 Redis 放进同一个工作台。
 
@@ -25,9 +25,9 @@
 前往官网 **http://dbman.tangsanlang.com/** 或本仓库的
 [Releases](../../releases) 页面下载对应平台安装包：
 
-- **macOS**：`DBMan_x.y.z_universal.dmg` —— 通用包，同时支持 Intel 与 Apple 芯片，要求 macOS 10.15+
-- **Windows**：`DBMan_x.y.z_x64-setup.exe`（NSIS）或 `DBMan_x.y.z_x64_en-US.msi`
-- **Linux**：`DBMan_x.y.z_amd64.AppImage`（免安装）或 `DBMan_x.y.z_amd64.deb`
+- **macOS**：`唐三浪DBMan_x.y.z_universal.dmg` —— 通用包，同时支持 Intel 与 Apple 芯片，要求 macOS 10.15+
+- **Windows**：`唐三浪DBMan_x.y.z_x64-setup.exe`（NSIS）或 `唐三浪DBMan_x.y.z_x64_en-US.msi`
+- **Linux**：`唐三浪DBMan_x.y.z_amd64.AppImage`（免安装）或 `唐三浪DBMan_x.y.z_amd64.deb`
 
 ## 技术栈
 

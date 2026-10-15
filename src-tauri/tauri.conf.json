@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "DBMan",
+  "productName": "唐三浪DBMan",
   "version": "1.2.1",
   "identifier": "com.tangsanlang.dbman",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DBMan",
+        "title": "唐三浪DBMan",
         "width": 1280,
         "height": 820,
         "minWidth": 1024,

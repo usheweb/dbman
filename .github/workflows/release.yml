@@ -87,9 +87,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
-          releaseName: DBMan v__VERSION__
+          releaseName: 唐三浪DBMan v__VERSION__
           releaseBody: |
-            DBMan v__VERSION__ 桌面数据库管理工具。
+            唐三浪DBMan v__VERSION__ 桌面数据库管理工具。
 
             各平台安装包见下方 Assets。macOS 为通用包，同时支持 Intel 与 Apple 芯片。
             官网：http://dbman.tangsanlang.com/
