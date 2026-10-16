@@ -2,7 +2,7 @@
 // MongoDB 右侧工作区：集合查询条件编辑 + 结果区。
 // 查询结果区完全复用关系型的 ResultArea（workspace store 已按连接类型把 fetchRows 分流到
 // mongo_query），所以分页、查找、全屏、历史结果、导出这些能力对 MongoDB 一并可用。
-import { computed, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useConnectionStore } from '@/stores/connection';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useMongo, buildSpec, rememberMongoFields, clearMongoFields } from '@/composables/useMongo';
@@ -31,17 +31,22 @@ watch(() => ws.resultColumns, cols => rememberMongoFields(cols));
 
 // ===== 字段筛选用「点字段名」代替手写 JSON =====
 
-// 「{ "_id": 0 }」这类写法既合法也常见；只用 JSON 对象，其余（数组、null）都当作不合法
-function parseProjection() {
-  const text = projectionText.value.trim();
-  if (!text) return {};
+// 「{ "_id": 0 }」这类写法既合法也常见；只用 JSON 对象，其余（数组、null）都当作不合法。
+// 空文本按 {} 处理（三个框都「留空 = 不过滤 / 不排序 / 取全部字段」）
+function parseJsonObj(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t) return {};
   try {
-    const obj = JSON.parse(text);
+    const obj = JSON.parse(t);
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
     return obj;
   } catch {
     return null;
   }
+}
+
+function parseProjection() {
+  return parseJsonObj(projectionText.value);
 }
 
 // 候选字段：结果列 + 记住的字段 + projection 里已有的字段（用户手写过的也要能点）
@@ -61,10 +66,28 @@ const fieldChips = computed(() => {
   return names;
 });
 
-// 字段筛选的 JSON 写坏了：不按用户输入猜，直接停用点选，避免把手上正在写的 JSON 覆盖掉
-const projInvalid = computed(() => parseProjection() === null);
+// 字段点选这一排作用于哪个输入框：三个框都能点，默认字段筛选
+const chipTarget = ref('projection');
+const CHIP_TARGETS = [
+  { value: 'filter', label: '过滤' },
+  { value: 'sort', label: '排序' },
+  { value: 'projection', label: '筛选' }
+];
+const CHIP_TARGET_TIP = {
+  filter: '字段点选作用于「过滤条件 filter」',
+  sort: '字段点选作用于「排序 sort」',
+  projection: '字段点选作用于「字段筛选 projection」'
+};
+const CHIP_BAD_TIP = '当前输入框不是合法 JSON，先修正后再点选';
 
-// 每个字段当前是「显示」还是「隐藏」。projection 留空 = 取全部字段，即全显示；
+// 当前作用框的 JSON 写坏了：不按用户输入猜，直接停用点选，避免覆盖用户正写的内容
+const targetInvalid = computed(() => {
+  if (chipTarget.value === 'filter') return parseJsonObj(filterText.value) === null;
+  if (chipTarget.value === 'sort') return parseJsonObj(sortText.value) === null;
+  return parseProjection() === null;
+});
+
+// 每个字段当前是「显示」还是「隐藏」（projection）。留空 = 取全部字段，即全显示；
 // 写成 {"a":1,"b":1} 是「只显示列出的」；写成 {"a":0} 是「排除列出的」
 const fieldShown = computed(() => {
   const proj = parseProjection();
@@ -80,11 +103,60 @@ const fieldShown = computed(() => {
   return out;
 });
 
-// 点字段名切换显示/隐藏，并把结果写回 projection 文本框。
-// 生成时按「哪边少写哪边」挑写法，且不把 1 和 0 混在一起（Mongo 只允许 _id 例外），
-// 所以点出来的 JSON 永远能跑
+// 每个字段标签的样子与提示语，随当前作用框（过滤 / 排序 / 筛选）而变
+const chipInfos = computed(() => {
+  const bad = targetInvalid.value;
+  const proj = parseProjection();
+  const filt = parseJsonObj(filterText.value);
+  const sort = parseJsonObj(sortText.value);
+  const target = chipTarget.value;
+  return fieldChips.value.map(name => {
+    if (target === 'filter') {
+      const on = !bad && !!filt && name in filt;
+      return {
+        name,
+        cls: { on, dead: bad },
+        suffix: '',
+        title: bad ? CHIP_BAD_TIP
+          : on ? `点一下把 ${name} 从过滤条件里去掉`
+            : `点一下把 ${name} 加进过滤条件，接着填值`
+      };
+    }
+    if (target === 'sort') {
+      const dir = (bad || !sort) ? 0 : (Number(sort[name]) || 0);
+      return {
+        name,
+        cls: { on: dir !== 0, desc: dir === -1, dead: bad },
+        suffix: dir === 1 ? ' ↑' : dir === -1 ? ' ↓' : '',
+        title: bad ? CHIP_BAD_TIP
+          : dir === 0 ? `点一下按 ${name} 升序`
+            : dir === 1 ? `点一下改为 ${name} 降序`
+              : `点一下取消 ${name} 排序`
+      };
+    }
+    const on = !bad && !!fieldShown.value[name];
+    return {
+      name,
+      cls: { on, off: !on, dead: bad },
+      suffix: '',
+      title: bad ? CHIP_BAD_TIP : `点一下${on ? '隐藏' : '显示'}字段 ${name}`
+    };
+  });
+});
+
+// 点字段标签：按当前作用框执行对应的操作
+function onChipClick(name) {
+  if (targetInvalid.value) return;
+  if (chipTarget.value === 'filter') return addFilterField(name);
+  if (chipTarget.value === 'sort') return toggleSortField(name);
+  return toggleProjField(name);
+}
+
+// 筛选：点一下切换显示/隐藏，写回的是合法写法 —— 按「哪边少写哪边」挑，
+// 且不把 1 与 0 混在一起（Mongo 只允许 _id 例外）
 function toggleProjField(field) {
-  if (projInvalid.value) return;
+  const proj = parseProjection();
+  if (!proj) return;
   const shown = new Set(fieldChips.value.filter(f => fieldShown.value[f]));
   if (shown.has(field)) shown.delete(field);
   else shown.add(field);
@@ -96,12 +168,51 @@ function toggleProjField(field) {
   const next = {};
   if (shown.size && shown.size <= rest.length) {
     shown.forEach(f => { if (f !== '_id') next[f] = 1; });
-    if (!shown.has('_id')) next._id = 0; // 只显示列出的字段时，_id 默认跟着来，不要就显式排除
+    if (!shown.has('_id')) next._id = 0; // 只显示列出的字段时 _id 默认跟着来，不要就显式排除
   } else {
     rest.forEach(f => { next[f] = 0; });
   }
   projectionText.value = JSON.stringify(next);
 }
+
+// 排序：未指定 → 升序 → 降序 → 取消；多字段按点击先后排在后面（JSON 顺序即排序优先级）
+function toggleSortField(field) {
+  const sort = parseJsonObj(sortText.value);
+  if (!sort) return;
+  const cur = Number(sort[field]) || 0;
+  if (cur === 1) sort[field] = -1;
+  else if (cur === -1) delete sort[field];
+  else sort[field] = 1;
+  sortText.value = Object.keys(sort).length ? JSON.stringify(sort) : '';
+}
+
+// 过滤：点一下把字段名写进条件（值留空、光标落在值上，只填值不用打字段名），再点一下移出
+function addFilterField(field) {
+  const filt = parseJsonObj(filterText.value);
+  if (!filt) return;
+  if (field in filt) {
+    delete filt[field];
+    filterText.value = Object.keys(filt).length ? JSON.stringify(filt) : '';
+    return;
+  }
+  filt[field] = '';
+  filterText.value = JSON.stringify(filt);
+  focusFilterValue(field);
+}
+
+// 把光标放进刚插入字段的空值引号中间，用户直接敲值即可
+async function focusFilterValue(field) {
+  await nextTick();
+  const el = filterEl.value;
+  if (!el) return;
+  const at = el.value.indexOf(`"${field}":""`);
+  if (at < 0) return;
+  const pos = at + field.length + 4;
+  el.focus();
+  el.setSelectionRange(pos, pos);
+}
+
+const filterEl = ref(null);
 </script>
 
 <template>
@@ -136,7 +247,7 @@ function toggleProjField(field) {
           <div class="mongo-fields">
             <label class="mongo-field">
               <span class="mongo-field-label">过滤条件 filter</span>
-              <textarea v-model="filterText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"status":"active"}'></textarea>
+              <textarea ref="filterEl" v-model="filterText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"status":"active"}'></textarea>
             </label>
             <label class="mongo-field">
               <span class="mongo-field-label">排序 sort</span>
@@ -147,29 +258,38 @@ function toggleProjField(field) {
               <textarea v-model="projectionText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"name":1,"_id":0} 留空取全部字段'></textarea>
             </label>
           </div>
-          <!-- 点字段名就能筛字段，不必手打 projection 的 JSON；写回的是合法写法，也能反过来编辑文本框 -->
+          <!-- 点字段名就能改三个框里的 JSON，不必手打字段名；写回的都是能直接跑的写法，也能反过来手改文本框 -->
           <div class="proj-bar">
-            <span class="proj-bar-label">字段点选</span>
-            <template v-if="fieldChips.length">
+            <div class="mongo-mode chip-target">
               <button
-                v-for="f in fieldChips"
-                :key="f"
+                v-for="t in CHIP_TARGETS"
+                :key="t.value"
+                class="mongo-mode-btn"
+                :class="{ active: chipTarget === t.value }"
+                :title="CHIP_TARGET_TIP[t.value]"
+                @click="chipTarget = t.value"
+              >{{ t.label }}</button>
+            </div>
+            <template v-if="chipInfos.length">
+              <button
+                v-for="c in chipInfos"
+                :key="c.name"
                 type="button"
                 class="proj-chip"
-                :class="{ on: fieldShown[f], off: !fieldShown[f], dead: projInvalid }"
-                :title="projInvalid ? '字段筛选不是合法 JSON，先修正后再点选' : `点击${fieldShown[f] ? '隐藏' : '显示'}字段 ${f}`"
-                @click.stop.prevent="toggleProjField(f)"
-              >{{ f }}</button>
+                :class="c.cls"
+                :title="c.title"
+                @click.stop.prevent="onChipClick(c.name)"
+              >{{ c.name }}{{ c.suffix }}</button>
             </template>
-            <span v-else class="proj-bar-hint">执行一次查询后，这里会列出结果字段，点一下即可筛选</span>
+            <span v-else class="proj-bar-hint">执行一次查询后，这里会列出结果字段，点一下即可用</span>
             <button
-              v-if="projectionText.trim()"
+              v-if="chipTarget === 'projection' && projectionText.trim()"
               type="button"
               class="proj-chip proj-chip-all"
               title="清空字段筛选，恢复显示全部字段"
               @click.stop.prevent="projectionText = ''"
             >全部字段</button>
-            <span v-if="projInvalid" class="proj-bar-warn">字段筛选不是合法 JSON，点选已停用</span>
+            <span v-if="targetInvalid" class="proj-bar-warn">当前输入框不是合法 JSON，点选已停用</span>
           </div>
         </div>
         <label v-else class="mongo-field mongo-field-wide">
@@ -277,14 +397,17 @@ function toggleProjField(field) {
   gap: 6px;
 }
 
-.proj-bar-label {
-  margin-right: 2px;
-  color: var(--text-dim);
-  font-size: 11px;
-  letter-spacing: .5px;
+/* 作用框切换（过滤/排序/筛选）：比顶部 find/aggregate 那排更小，和字段标签同高 */
+.chip-target {
+  flex: 0 0 auto;
 }
 
-/* 字段标签：青色描边=显示，虚线灰=隐藏；点一下切换，不用手写 projection JSON */
+.chip-target .mongo-mode-btn {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+/* 字段标签：青色=已启用，虚线灰=未启用；点一下切换，不用手写 JSON */
 .proj-chip {
   max-width: 180px;
   padding: 2px 9px;
@@ -317,6 +440,13 @@ function toggleProjField(field) {
   border-style: dashed;
   opacity: .65;
   text-decoration: line-through;
+}
+
+/* 排序方向：升序青、降序洋红，和结果表里可排序字段的配色一致 */
+.proj-chip.desc {
+  color: var(--magenta);
+  border-color: rgba(var(--magenta-rgb), .45);
+  background: rgba(var(--magenta-rgb), .12);
 }
 
 .proj-chip.dead {
