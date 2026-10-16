@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, watch } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import { isRelational, isFileBased, isMongoLike } from '@/utils/dbType';
@@ -217,14 +217,31 @@ function validate() {
   return true;
 }
 
+// 测试连接可能等好几秒（超时 8 秒）：期间按钮显示旋转图标与已耗时秒数，
+// 免得用户以为没反应而反复点
+const testing = ref(false);
+const testElapsed = ref(0);
+let testTimer = null;
+
 async function onTest() {
+  if (testing.value) return; // 连点会重复发起连接
   if (!validate()) return;
+  testing.value = true;
+  testElapsed.value = 0;
+  const startedAt = Date.now();
+  testTimer = setInterval(() => {
+    testElapsed.value = Math.floor((Date.now() - startedAt) / 1000);
+  }, 250);
   try {
     // 占位符不是真密码：测试前得先把「沿用」的字段还原成钥匙串里的旧值
     await connStore.testConnection(buildPayload(await resolveSecrets(rawSecrets())));
     ui.showToast('连接成功！', 'success');
   } catch (err) {
     ui.showToast('连接失败：' + String(err), 'error');
+  } finally {
+    clearInterval(testTimer);
+    testTimer = null;
+    testing.value = false;
   }
 }
 
@@ -377,8 +394,36 @@ async function onSave() {
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
           <button type="button" class="btn btn-secondary" @click="ui.closeModal('connectionModal')">取消</button>
-          <button type="button" class="btn" @click="onTest">测试连接</button>
-          <button type="submit" class="btn">保存</button>
+          <button
+            type="button"
+            class="btn"
+            :class="{ 'btn-loading': testing }"
+            :disabled="testing"
+            @click="onTest"
+          >
+            <!-- 进行中：图标转圈 + 已耗时秒数（1 秒、2 秒…），让用户知道在连而不是没反应 -->
+            <svg
+              v-if="testing"
+              class="icon-spin"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-dasharray="42 15"
+              />
+            </svg>
+            {{ testing ? `连接中… ${testElapsed} 秒` : '测试连接' }}
+          </button>
+          <button type="submit" class="btn" :disabled="testing">保存</button>
         </div>
       </form>
       </div>

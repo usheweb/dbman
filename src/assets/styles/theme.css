@@ -1534,9 +1534,20 @@
             /* 展开要即时，延迟只作用于收起 */
             transition-delay: 0s;
         }
-        /* 刷新进行中的图标旋转反馈 */
-        .icon-btn svg.icon-spin {
+        /* 旋转反馈：结果区刷新按钮、弹窗里的「测试连接」按钮共用 */
+        .icon-btn svg.icon-spin,
+        .btn svg.icon-spin {
             animation: iconSpin 0.8s linear infinite;
+        }
+        /* 「测试连接」进行中：图标与「连接中… N 秒」并排显示 */
+        .btn-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* 进行中的按钮是「正在等」而不是「不可用」，保留正常亮度，只换成等待光标 */
+        .btn-loading:disabled {
+            cursor: progress;
         }
         @keyframes iconSpin {
             from { transform: rotate(0deg); }
