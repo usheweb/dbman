@@ -233,14 +233,9 @@
             color: transparent;
             filter: drop-shadow(0 0 12px rgba(var(--cyan-rgb), .5));
         }
-        .header h1::after {
-            content: '_';
-            -webkit-text-fill-color: var(--cyan);
-            animation: blink 1.2s steps(2, start) infinite;
-        }
-        @keyframes blink {
-            50% { opacity: 0; }
-        }
+        /* 品牌标题后面那个闪烁光标不在 h1 里（见 AppHeader 的 .brand-caret）：
+           h1 是「渐变底裁到文字 + 发光阴影」的合成层，光标动画挂在它内部会让这一层
+           跟着重绘，看起来就是文字和它后面的光晕一起在闪 */
         .main-content {
             display: flex;
             flex: 1;

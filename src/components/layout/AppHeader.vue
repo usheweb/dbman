@@ -66,7 +66,11 @@ async function purgeSecrets() {
   <div class="header">
     <div class="brand">
       <img class="brand-logo" src="@/assets/logo.svg" alt="">
-      <h1>唐三浪DBMan</h1>
+      <span class="brand-title">
+        <h1>唐三浪DBMan</h1>
+        <!-- 闪烁光标放在 h1 外面：h1 是「渐变裁字 + 发光」的一层，动画挂在里面会连背景一起闪 -->
+        <span class="brand-caret" aria-hidden="true">_</span>
+      </span>
     </div>
     <ConnectionTabs />
     <div class="header-right">
@@ -122,6 +126,27 @@ async function purgeSecrets() {
   height: 28px;
   display: block;
   filter: drop-shadow(0 0 10px rgba(var(--cyan-rgb), .35));
+}
+
+/* 标题 + 光标合成一行：光标是独立一层动画，h1 的渐变 / 发光层保持静止不重绘 */
+.brand-title {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 闪烁光标：原来挂在 h1 的 ::after 上，会让 h1「渐变裁字 + 发光」整层跟着闪 */
+.brand-caret {
+  margin-left: 4px;
+  color: var(--cyan);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  animation: brandCaretBlink 1.2s steps(2, start) infinite;
+}
+
+@keyframes brandCaretBlink {
+  50% { opacity: 0; }
 }
 
 /* 图标按钮样式见 theme.css 的 .icon-btn */
