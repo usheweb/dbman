@@ -35,6 +35,18 @@ pub trait RelationalDriver: Send + Sync {
     /// 列出某库中的表（名 + 注释 + 排序维度元数据）；filter 非空时按表名/注释模糊匹配。
     async fn tables(&self, database: &str, filter: Option<&str>) -> Result<Vec<TableInfo>, String>;
 
+    /// 同 [`Self::tables`]，但 `limit` 非空时只取前若干张表。
+    /// 表多的库（几百张）前端先用它拿一小批把列表渲染出来，再调 `tables` 拉全量覆盖，避免干等。
+    /// 默认实现忽略 limit（驱动可自行覆盖以获得更快的首屏）。
+    async fn tables_page(
+        &self,
+        database: &str,
+        filter: Option<&str>,
+        _limit: Option<u32>,
+    ) -> Result<Vec<TableInfo>, String> {
+        self.tables(database, filter).await
+    }
+
     /// 列出某库某表的列（名 + 注释 + 类型）。
     async fn columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>, String>;
 
@@ -166,11 +178,12 @@ pub async fn db_tables(
     conn_id: String,
     database: String,
     filter: Option<String>,
+    limit: Option<u32>,
 ) -> Result<Vec<TableInfo>, String> {
     state
         .get_driver(&conn_id)
         .await?
-        .tables(&database, filter.as_deref())
+        .tables_page(&database, filter.as_deref(), limit)
         .await
 }
 

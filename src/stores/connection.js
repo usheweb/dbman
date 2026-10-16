@@ -37,6 +37,8 @@ export const useConnectionStore = defineStore('connection', () => {
       databaseList: [],
       table: null,
       allTables: [],
+      // 首屏小批表已经渲染、全量还在回：对外显示「加载中」，避免表数从 20 跳到 N
+      tablesLoading: false,
       tableColumns: {},
       triedColumns: {}
     };
@@ -50,6 +52,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const serverConnId = computed(() => (active.value ? active.value.serverConnId : null));
   const currentDatabaseList = computed(() => (active.value ? active.value.databaseList : []));
   const allTables = computed(() => (active.value ? active.value.allTables : []));
+  const tablesLoading = computed(() => (active.value ? active.value.tablesLoading : false));
   // 返回会话内那个响应式对象，外部 `delete conn.tableColumns[x]` 可原地生效
   const tableColumns = computed(() => (active.value ? active.value.tableColumns : {}));
 
@@ -406,11 +409,26 @@ export const useConnectionStore = defineStore('connection', () => {
     return selectDatabaseFor(activeId.value, db);
   }
 
+  // 表列表两阶段加载：表多（几百张）时干等全量元数据太久，先用一小批把列表渲染出来，
+  // 再拉全量覆盖。递增序号防竞态：期间又切了库的话，旧请求的结果不再写回
+  const TABLE_PREVIEW_LIMIT = 20;
+  const tableLoadSeq = {};
+
   async function loadTablesFor(connId, db) {
     const s = sessions.value[connId];
     if (!s) return;
-    const data = await withRetryFor(s, id => api.dbTables(id, db, null));
-    s.allTables = data;
+    const seq = (tableLoadSeq[connId] = (tableLoadSeq[connId] || 0) + 1);
+    const preview = await withRetryFor(s, id => api.dbTables(id, db, null, TABLE_PREVIEW_LIMIT));
+    if (tableLoadSeq[connId] !== seq) return;
+    s.allTables = preview;
+    s.tablesLoading = true;
+    try {
+      const all = await withRetryFor(s, id => api.dbTables(id, db, null, null));
+      if (tableLoadSeq[connId] !== seq) return;
+      s.allTables = all;
+    } finally {
+      if (tableLoadSeq[connId] === seq) s.tablesLoading = false;
+    }
   }
 
   function loadTables(db) {
@@ -445,6 +463,7 @@ export const useConnectionStore = defineStore('connection', () => {
     currentDatabaseList,
     currentTable,
     allTables,
+    tablesLoading,
     tableColumns,
     triedColumns,
     isConnected,

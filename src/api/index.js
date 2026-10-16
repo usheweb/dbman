@@ -17,8 +17,9 @@ export function dbDatabases(connId) {
   return invoke('db_databases', { connId });
 }
 
-export function dbTables(connId, database, filter) {
-  return invoke('db_tables', { connId, database, filter: filter || null });
+// limit 非空时后端只返回前 N 张表（首屏快速渲染用），为 null 时返回全量
+export function dbTables(connId, database, filter, limit) {
+  return invoke('db_tables', { connId, database, filter: filter || null, limit: limit || null });
 }
 
 export function dbColumns(connId, database, table) {

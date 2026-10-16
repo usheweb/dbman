@@ -91,8 +91,10 @@ const filteredTables = computed(() => {
 // 过滤后再按排序键（可多列组合）排序
 const sortedTables = computed(() => sortTables(filteredTables.value, sortKeys.value));
 
-// 列表上方的数量统计：无过滤词时给全量，有过滤词时给「命中 / 总数」
+// 列表上方的数量统计：全量还没回来时先显示加载中（否则表数会从 20 跳到 N），
+// 无过滤词时给全量，有过滤词时给「命中 / 总数」
 const tableCountText = computed(() => {
+  if (connStore.tablesLoading) return '表列表加载中…';
   const total = connStore.allTables.length;
   if (!tokens.value.length) return '共 ' + total + ' 张表';
   return filteredTables.value.length + ' / ' + total + ' 张表';
