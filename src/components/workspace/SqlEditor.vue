@@ -255,7 +255,6 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path :d="ui.viewOpts.sqlCollapsed ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'" />
           </svg>
-          <span class="btn-label">{{ ui.viewOpts.sqlCollapsed ? '展开' : '收起' }}</span>
         </button>
       </div>
     </div>
