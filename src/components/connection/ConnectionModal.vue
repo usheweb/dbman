@@ -38,6 +38,29 @@ function needsAuth(type) {
   return isRelational(type) && !isFileBased(type);
 }
 
+// 各类型常见的管理员账号：用户名提示必须随类型变化，写死 MySQL/root 会让选了
+// MariaDB / PostgreSQL / SQL Server / Oracle 的用户以为填错地方了
+const DEFAULT_USERS = {
+  mysql: 'root',
+  mariadb: 'root',
+  postgres: 'postgres',
+  postgresql: 'postgres',
+  sqlserver: 'sa',
+  mssql: 'sa',
+  oracle: 'system'
+};
+
+function typeLabel(type) {
+  const found = DB_TYPES.find(t => t.value === type);
+  return found ? found.label : type;
+}
+
+// 用户名输入框的占位提示
+function userPlaceholder(type) {
+  const example = DEFAULT_USERS[type];
+  return example ? `如：${example}` : '可留空';
+}
+
 // MongoDB 的 config.database 传的是「认证库」（authSource），与关系型的「数据库」同字段
 function hasDbField(type) {
   return isRelational(type) || isMongoLike(type);
@@ -173,11 +196,15 @@ async function pickSqliteFile() {
   if (picked) form.database = picked;
 }
 
-// 用户名必填针对需要认证的关系型库：留空时 MySQL 会按匿名账号登录，只能看到 information_schema 等极少数库。
+// 用户名必填针对需要认证的关系型库：留空时会按匿名账号登录，只能看到极少数系统库。
 // SQLite 为本地文件，Redis 走密码认证（后端固定不带用户名），所以不校验用户名。
 function validate() {
   if (needsAuth(form.type) && !form.user.trim()) {
-    ui.showToast('请填写用户名（如 MySQL 一般填 root）', 'error');
+    const example = DEFAULT_USERS[form.type];
+    ui.showToast(
+      `请填写用户名（${typeLabel(form.type)} 一般填 ${example || '管理员账号'}）`,
+      'error'
+    );
     return false;
   }
   return true;
@@ -287,7 +314,7 @@ async function onSave() {
           <div class="form-group">
             <label>用户名</label>
             <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" v-model="form.user"
-              :required="needsAuth(form.type)" :placeholder="needsAuth(form.type) ? '如：root' : '可留空'">
+              :required="needsAuth(form.type)" :placeholder="userPlaceholder(form.type)">
           </div>
           <div class="form-group">
             <label>密码</label>
