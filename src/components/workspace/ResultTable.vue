@@ -197,11 +197,19 @@ function pendingKind(r, c) {
   return ws.pendingKind(r, c);
 }
 
+// 整表所有列被选中（点行号选整行时就是这样）。这种情况下单元格高亮交给
+// <tr>.all-cols + CSS 表达，不再给每个单元格改 class：否则一次选中要让
+// 300 行 × N 列的单元格全部重算 class，宽表下会明显卡顿
+const allColsSelected = computed(
+  () => columns.value.length > 0 && selColSet.value.size === columns.value.length
+);
+
 function cellClass(row, col, r, c) {
   const kind = pendingKind(r, c);
   return {
     'cell-match': ws.cellHit(row, col),
-    'cell-selected': isCellSelected(r, c),
+    // 这里只表达「列」这一维；「行」由 <tr>.row-selected 表达，CSS 里两者同时成立才算选中
+    'cell-selected': !allColsSelected.value && selColSet.value.has(col),
     'cell-active': cellMidx(r, c) === ws.findState.index,
     'cell-pending-empty': kind === 'empty',
     'cell-pending-null': kind === 'null',
@@ -423,16 +431,24 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             @contextmenu.prevent="showHeaderMenu($event, col)"
           >
             {{ col }}
-            <div
-              v-if="colComments[col]"
-              class="column-comment"
-              :title="colComments[col]"
-              :data-value="colComments[col]"
-              @dblclick="ui.openContent(colComments[col])"
-            >{{ colComments[col] }}</div>
+            <div v-if="colComments[col]" class="col-sub">
+              <div
+                class="column-comment"
+                :title="colComments[col]"
+                :data-value="colComments[col]"
+                @dblclick="ui.openContent(colComments[col])"
+              >{{ colComments[col] }}</div>
+              <button
+                v-if="isConvertible(col)"
+                class="col-mode"
+                :class="{ active: modes[col] !== 'raw' }"
+                @click.stop="ws.toggleColumnMode(col)"
+              >{{ ws.MODE_LABEL[modes[col]] }}</button>
+            </div>
+            <!-- 没有注释的列（如纯时间戳字段）没有第二行可压，按钮保持常规排版 -->
             <button
-              v-if="isConvertible(col)"
-              class="col-mode"
+              v-else-if="isConvertible(col)"
+              class="col-mode col-mode-solo"
               :class="{ active: modes[col] !== 'raw' }"
               @click.stop="ws.toggleColumnMode(col)"
             >{{ ws.MODE_LABEL[modes[col]] }}</button>
@@ -455,7 +471,11 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
         </tr>
       </tbody>
       <tbody v-else>
-        <tr v-for="r in ws.visibleRowIndexes" :key="r">
+        <tr
+          v-for="r in ws.visibleRowIndexes"
+          :key="r"
+          :class="{ 'row-selected': isRowSelected(r), 'all-cols': allColsSelected }"
+        >
           <td
             class="row-head"
             :class="{ 'row-selected': isRowSelected(r) }"

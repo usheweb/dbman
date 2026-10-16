@@ -1723,13 +1723,17 @@
             gap: 8px;
             align-items: center;
         }
+        /* 「原值 / 时间 / 文字」切换按钮：压在注释第二行右侧（.col-sub 为定位容器） */
         .col-mode {
+            position: absolute;
+            right: 0;
+            bottom: 0;
             display: inline-block;
-            margin-top: 5px;
             padding: 1px 7px;
             border-radius: calc(var(--radius) - 2px);
             border: 1px solid var(--line);
-            background: rgba(var(--cyan-rgb), .05);
+            /* 要盖住下层的注释文字，底色不能是半透明的 */
+            background: linear-gradient(rgba(var(--cyan-rgb), .06), rgba(var(--cyan-rgb), .06)), var(--panel-solid);
             color: var(--text-dim);
             font-family: var(--font-cjk);
             font-size: 11px;
@@ -1737,6 +1741,11 @@
             letter-spacing: 1px;
             cursor: pointer;
             transition: all .2s ease;
+        }
+        /* 没有注释可压的列（如纯时间戳字段）：按钮回到常规排版 */
+        .col-mode.col-mode-solo {
+            position: static;
+            margin-top: 5px;
         }
         .col-mode:hover {
             border-color: var(--line-strong);
@@ -1838,11 +1847,18 @@
             background: rgba(var(--cyan-rgb), .16);
             color: var(--on-accent);
         }
-        /* 单击选中的单元格：主强调色高亮；查找命中的紫色高亮优先显示 */
-        .data-table tbody tr td.cell-selected {
+        /* 单击选中的单元格：行选中（tr.row-selected）与列选中（td.cell-selected）同时成立。
+           点行号选整行时所有列都被选中，走 tr.all-cols 这条路径，避免给整表每个单元格改 class。
+           权重用 :where() 压回原来的 (0,2,3)，保证与下面的悬停 / 查找命中 / 待保存的先后关系不变 */
+        .data-table tbody tr:where(.row-selected) td.cell-selected,
+        .data-table tbody tr:where(.row-selected).all-cols td {
             background: linear-gradient(180deg, rgba(var(--cyan-rgb), .28), rgba(var(--cyan-rgb), .12));
             color: var(--on-accent);
             box-shadow: inset 0 0 0 1px var(--line-strong);
+        }
+        /* 注释与「原值」按钮共用的定位容器：按钮压在注释第二行右侧 */
+        .col-sub {
+            position: relative;
         }
         .column-comment {
             font-size: 10px;
@@ -1850,10 +1866,13 @@
             font-weight: normal;
             text-transform: none;
             letter-spacing: 0;
-            max-width: 140px;
-            white-space: nowrap;
+            /* 宽度砍半（原 140px），最多两行、超出省略号，避免长注释把列撑宽 */
+            max-width: 70px;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            white-space: normal;
             overflow: hidden;
-            text-overflow: ellipsis;
             cursor: help;
         }
         /* 查找条：与结果标题同处一行，贴右显示（表格右上方） */
@@ -2741,7 +2760,8 @@
             color: var(--text-dim);
             font-style: italic;
         }
-        .data-table tbody tr td.cell-null.cell-selected {
+        .data-table tbody tr:where(.row-selected) td.cell-null.cell-selected,
+        .data-table tbody tr:where(.row-selected).all-cols td.cell-null {
             color: var(--on-accent);
         }
         /* 「保存修改」是结果区的主操作：文字常显，不跟随 hover 展开 */
