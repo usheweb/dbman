@@ -24,6 +24,10 @@ const ctx = computed(() => {
       :title="ctx ? t.name + '（' + ctx + '）' : t.name"
       @click="ws.activateQueryTab(t.id)"
     >
+      <svg class="conn-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">
+        <path d="M9.4 1.8H4.6a1.4 1.4 0 0 0-1.4 1.4v9.6a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.2L9.4 1.8Z" />
+        <path d="M9.4 1.8v3.4h3.4" />
+      </svg>
       <span class="conn-tab-name">{{ t.name }}</span>
       <span
         v-if="ws.activeTabs.length > 1"

@@ -17,7 +17,7 @@ const conn = useConnectionStore();
       :title="t.name"
       @click="conn.activateTab(t.id)"
     >
-      <ItemIcon :name="t.type" />
+      <ItemIcon class="conn-tab-icon" :name="t.type" />
       <span class="conn-tab-name">{{ t.name }}</span>
       <span class="conn-tab-close" title="关闭连接" @click.stop="conn.closeTab(t.id)">×</span>
     </button>

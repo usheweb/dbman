@@ -1128,6 +1128,7 @@
             overflow-x: auto;
             overflow-y: hidden;
         }
+        /* 连接 / 查询 Tab：圆角小片 + 类型图标 + 名称 + 悬停才出现的关闭圆钮（按参考图） */
         .conn-tab {
             position: relative;
             flex: 0 0 auto;
@@ -1135,32 +1136,17 @@
             align-items: center;
             gap: 7px;
             max-width: 200px;
-            padding: 7px 10px 7px 11px;
-            background: rgba(var(--ink-4-rgb), .5);
-            border: 1px solid var(--line);
-            border-radius: 9px;
+            padding: 6px 10px;
+            background: rgba(var(--ink-4-rgb), .35);
+            border: 1px solid transparent;
+            border-radius: 10px;
             color: var(--text-dim);
             font-family: var(--font-ui);
             font-size: 13px;
             letter-spacing: .3px;
             cursor: pointer;
             white-space: nowrap;
-            transition: background .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
-        }
-        /* 选中态底部的一道光条：比整块高亮更克制，也更像「当前标签」 */
-        .conn-tab::after {
-            content: '';
-            position: absolute;
-            left: 10px;
-            right: 10px;
-            bottom: 3px;
-            height: 2px;
-            border-radius: 2px;
-            background: linear-gradient(90deg, var(--cyan), var(--accent-bright));
-            box-shadow: 0 0 10px rgba(var(--cyan-rgb), .75);
-            opacity: 0;
-            transform: scaleX(.35);
-            transition: opacity .2s ease, transform .2s ease;
+            transition: background .18s ease, color .18s ease, border-color .18s ease;
         }
         .conn-tab:hover {
             background: var(--hover-bg);
@@ -1168,17 +1154,19 @@
             border-color: var(--hover-line);
         }
         .conn-tab.active {
-            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .16), rgba(var(--cyan-rgb), .04));
+            background: rgba(var(--cyan-rgb), .13);
             color: var(--cyan);
-            border-color: rgba(var(--cyan-rgb), .45);
-            box-shadow: var(--glow-cyan);
-        }
-        .conn-tab.active::after {
-            opacity: 1;
-            transform: scaleX(1);
+            border-color: rgba(var(--cyan-rgb), .4);
         }
         .conn-tab.active:hover {
-            background: linear-gradient(180deg, rgba(var(--cyan-rgb), .24), rgba(var(--cyan-rgb), .08));
+            background: rgba(var(--cyan-rgb), .2);
+        }
+        /* Tab 上的图标：连接 Tab 是库类型图标，查询 Tab 是文档图标 */
+        .conn-tab-icon {
+            flex: 0 0 auto;
+            width: 14px;
+            height: 14px;
+            stroke-linejoin: round;
         }
         .conn-tab-name {
             flex: 0 1 auto;
@@ -1186,28 +1174,30 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* 关闭按钮：默认隐去，悬停或选中该标签时才出现，减少视觉噪音 */
+        /* 关闭圆钮：平时藏起来，鼠标移到该标签上才出现；实心圆 + 反色叉，比一个淡 × 显眼得多 */
         .conn-tab-close {
-            flex: 0 0 16px;
+            flex: 0 0 15px;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 16px;
-            height: 16px;
-            border-radius: 5px;
-            font-size: 13px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            color: rgb(var(--void-rgb));
+            font-size: 11px;
+            font-weight: 700;
             line-height: 1;
-            color: var(--text-dim);
             opacity: 0;
-            transition: opacity .16s ease, background .16s ease, color .16s ease;
+            transform: scale(.75);
+            transition: opacity .16s ease, transform .16s ease, background .16s ease;
         }
-        .conn-tab:hover .conn-tab-close,
-        .conn-tab.active .conn-tab-close {
+        .conn-tab:hover .conn-tab-close {
             opacity: 1;
+            transform: scale(1);
         }
         .conn-tab-close:hover {
-            background: rgba(var(--magenta-rgb), .18);
-            color: var(--magenta);
+            background: var(--magenta);
         }
         .database-panel {
             display: flex;
@@ -1355,6 +1345,7 @@
             overflow-x: auto;
             overflow-y: hidden;
         }
+        /* 新建查询：参考图里就是一个光板的细加号，跟在最后一个 Tab 后面，悬停才有底色 */
         .query-tab-add {
             flex: 0 0 auto;
             display: flex;
@@ -1363,21 +1354,20 @@
             width: 26px;
             height: 26px;
             padding: 0;
-            background: rgba(var(--ink-4-rgb), .5);
-            border: 1px solid var(--line);
-            border-radius: 9px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
             color: var(--text-dim);
             cursor: pointer;
-            transition: background .18s ease, color .18s ease, border-color .18s ease;
+            transition: background .18s ease, color .18s ease;
         }
         .query-tab-add:hover {
             background: var(--hover-bg);
-            color: var(--cyan);
-            border-color: var(--hover-line);
+            color: var(--text);
         }
         .query-tab-add svg {
-            width: 14px;
-            height: 14px;
+            width: 15px;
+            height: 15px;
         }
         .query-editor {
             height: 40%;
