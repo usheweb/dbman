@@ -17,14 +17,38 @@ const projectionText = ref('');
 // 聚合管道默认给一段能直接跑通的示例，避免空数组执行后一片空白
 const pipelineText = ref('[\n  { "$match": {} },\n  { "$limit": 50 }\n]');
 
+// 字段筛选（projection）的候选字段：文档型数据字段不固定，单次结果的列不一定覆盖全部字段
+// （尤其字段筛选生效后只剩选中的那几列），所以按当前集合记住「见过的」字段并集，换集合才清空
+const knownFields = ref([]);
+
 // 请求令牌：连续切库时只认最后一次结果，避免旧结果覆盖新列表
 let listToken = 0;
 
 export function useMongo() {
   return {
     collections, selectedCollection,
-    mode, filterText, sortText, projectionText, pipelineText
+    mode, filterText, sortText, projectionText, pipelineText,
+    knownFields
   };
+}
+
+// 把本次结果的列名并进候选字段（去重、保持出现顺序）
+export function rememberMongoFields(names) {
+  if (!names || !names.length) return;
+  const seen = new Set(knownFields.value);
+  let added = false;
+  for (const name of names) {
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      added = true;
+    }
+  }
+  if (added) knownFields.value = [...seen];
+}
+
+// 切换集合时清空，避免上个集合的字段名残留
+export function clearMongoFields() {
+  knownFields.value = [];
 }
 
 // 切换连接时清空，避免上一条 MongoDB 的集合列表 / 选中项串台
@@ -36,6 +60,7 @@ export function resetMongo() {
   sortText.value = '';
   projectionText.value = '';
   pipelineText.value = '[\n  { "$match": {} },\n  { "$limit": 50 }\n]';
+  knownFields.value = [];
 }
 
 // 拉取当前库的集合列表（切库 / 重连后都要重拉）
