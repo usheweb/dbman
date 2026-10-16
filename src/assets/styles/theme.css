@@ -1866,15 +1866,17 @@
             font-weight: normal;
             text-transform: none;
             letter-spacing: 0;
-            /* 宽度砍半（原 140px），最多两行、超出省略号，避免长注释把列撑宽 */
-            max-width: 70px;
+            /* 上限放宽到 100px（约 10 个汉字宽）：宽度还够时不该提前换行，
+               放不下的才折到第二行；超过两行截断，仍避免长注释把列撑宽 */
+            max-width: 100px;
             display: -webkit-box;
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
             white-space: normal;
             /* 中英混排时（如「平台 ios/android/web」）浏览器只在文字之间找断点，
-               英文整词会被挤到第二行，首行右侧留一大片空白；允许任意字符断行把首行填满 */
-            word-break: break-all;
+               英文整词会被挤到第二行、首行留白；overflow-wrap: break-word 只在整词
+               确实放不下时才允许词内断开以填满行尾，不像 break-all 那样有余量也断 */
+            overflow-wrap: break-word;
             overflow: hidden;
             cursor: help;
         }
