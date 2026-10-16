@@ -69,20 +69,20 @@ function clearLog() {
   <ModalShell :visible="ui.modals.sqlLogModal" width="900px" @close="ui.closeModal('sqlLogModal')">
     <template #title>SQL 日志</template>
     <div class="log-tools">
-      <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="find-input" ref="searchInput" v-model="keyword" placeholder="模糊匹配 SQL 语句..." title="支持包含匹配与模糊匹配">
+      <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="find-input" ref="searchInput" v-model="keyword" placeholder="模糊匹配 SQL 语句..." v-tip="'支持包含匹配与模糊匹配'">
       <IconSelect
         class="log-date"
         :model-value="date"
         :options="dateOptions"
         placeholder="全部日期"
-        title="按日期筛选"
+        v-tip="'按日期筛选'"
         @update:model-value="v => (date = v)"
       />
       <span class="log-count">{{ items.length }} / {{ sqlStore.sqlLog.length }} 条</span>
       <button class="btn btn-secondary" @click="clearLog">清空日志</button>
     </div>
     <div class="log-list">
-      <div class="log-item" v-for="x in items" :key="x.idx" @click="useLogSql(x.idx)" title="点击把这条 SQL 载入编辑器">
+      <div class="log-item" v-for="x in items" :key="x.idx" @click="useLogSql(x.idx)" v-tip="'点击把这条 SQL 载入编辑器'">
         <div class="log-meta">
           <span class="log-type" :class="sqlStore.sqlLogClass(x.e.type)">{{ x.e.type }}</span>
           <span>{{ formatDateTime(new Date(x.e.t)) }}</span>
@@ -90,8 +90,8 @@ function clearLog() {
           <span v-if="x.e.conn">连接: {{ x.e.conn }}</span>
           <span :class="x.e.ok ? 'log-ok' : 'log-err'">{{ x.e.ok ? '✓ ' + x.e.rows + ' 行' : '✕ 失败' }} · {{ x.e.elapsed }}ms</span>
           <span v-if="x.e.err" class="log-err">{{ x.e.err }}</span>
-          <button class="log-fav" :class="{ active: sqlStore.isFaved(x.e.sql) }" :title="sqlStore.isFaved(x.e.sql) ? '取消收藏' : '收藏这条 SQL'" @click.stop="favFromLog(x.idx)">&starf;</button>
-          <button class="log-del" title="删除这条日志" @click.stop="deleteLog(x.idx)">&times;</button>
+          <button class="log-fav" :class="{ active: sqlStore.isFaved(x.e.sql) }" v-tip="sqlStore.isFaved(x.e.sql) ? '取消收藏' : '收藏这条 SQL'" @click.stop="favFromLog(x.idx)">&starf;</button>
+          <button class="log-del" v-tip="'删除这条日志'" @click.stop="deleteLog(x.idx)">&times;</button>
         </div>
         <div class="log-sql" v-html="highlightSqlSyntax(x.e.sql, keyword)"></div>
       </div>

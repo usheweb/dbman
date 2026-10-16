@@ -166,7 +166,7 @@ async function saveTtl() {
           <span class="redis-ttl">
             <template v-if="!ttlEditing">
               TTL：{{ ttlText }}
-              <button class="row-btn" title="修改 TTL" @click="startTtlEdit">改</button>
+              <button class="row-btn" v-tip="'修改 TTL'" @click="startTtlEdit">改</button>
             </template>
             <template v-else>
               TTL：
@@ -180,14 +180,14 @@ async function saveTtl() {
                 @keydown.esc="ttlEditing = false"
               >
               <span class="ttl-unit">秒</span>
-              <button class="row-btn" title="保存 TTL" @click="saveTtl">√</button>
-              <button class="row-btn" title="取消" @click="ttlEditing = false">×</button>
+              <button class="row-btn" v-tip="'保存 TTL'" @click="saveTtl">√</button>
+              <button class="row-btn" v-tip="'取消'" @click="ttlEditing = false">×</button>
               <span class="ttl-hint">-1 = 永久</span>
             </template>
           </span>
           <span class="redis-head-spacer"></span>
           <button v-if="valueEditable && !editing" class="btn btn-secondary" @click="editing = true">编辑内容</button>
-          <span v-else-if="!valueEditable" class="redis-readonly" :title="readonlyReason">{{ readonlyReason }}</span>
+          <span v-else-if="!valueEditable" class="redis-readonly" v-tip="readonlyReason">{{ readonlyReason }}</span>
         </div>
         <p v-else>读取中…</p>
       </div>

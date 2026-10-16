@@ -14,12 +14,12 @@ const conn = useConnectionStore();
       :key="t.id"
       class="conn-tab"
       :class="{ active: t.active }"
-      :title="t.name"
+      v-tip="t.name"
       @click="conn.activateTab(t.id)"
     >
       <ItemIcon class="conn-tab-icon" :name="t.type" />
       <span class="conn-tab-name">{{ t.name }}</span>
-      <span class="conn-tab-close" title="关闭连接" @click.stop="conn.closeTab(t.id)">×</span>
+      <span class="conn-tab-close" v-tip="'关闭连接'" @click.stop="conn.closeTab(t.id)">×</span>
     </button>
   </div>
 </template>

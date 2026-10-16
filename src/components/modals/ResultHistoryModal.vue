@@ -60,13 +60,13 @@ function backToLatest() {
         type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
         class="find-input"
         placeholder="按 SQL 关键字筛选..."
-        title="输入关键字过滤历史记录"
+        v-tip="'输入关键字过滤历史记录'"
       >
       <span class="hist-count">{{ items.length }} / {{ ws.historyList.length }} 条</span>
       <button
         class="btn btn-secondary"
         :disabled="!ws.historyView"
-        title="退出历史回看，回到最新一次执行的结果"
+        v-tip="'退出历史回看，回到最新一次执行的结果'"
         @click="backToLatest"
       >回到最新结果</button>
     </div>
@@ -77,7 +77,7 @@ function backToLatest() {
         :key="e.id"
         class="hist-item"
         :class="{ active: e.id === ws.historyView }"
-        title="点击查看这一条的历史结果"
+        v-tip="'点击查看这一条的历史结果'"
         @click="viewResult(e)"
       >
         <div class="hist-meta">
@@ -88,7 +88,7 @@ function backToLatest() {
           <span v-if="e.id === ws.historyView" class="hist-flag">当前查看</span>
           <button
             class="btn btn-secondary hist-load"
-            title="把这条 SQL 载入编辑器并查看结果"
+            v-tip="'把这条 SQL 载入编辑器并查看结果'"
             @click.stop="loadSql(e)"
           >载入 SQL</button>
         </div>

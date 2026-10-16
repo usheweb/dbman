@@ -72,7 +72,7 @@ async function commitPage() {
     <div class="page-group">
       <button
         class="page-btn"
-        title="上一页"
+        v-tip="'上一页'"
         :disabled="pagingDisabled || ws.pageNo <= 1"
         @click="ws.gotoPage(ws.pageNo - 1)"
       >‹</button>
@@ -84,7 +84,7 @@ async function commitPage() {
         autocorrect="off"
         spellcheck="false"
         :disabled="pagingDisabled"
-        :title="pagingTitle"
+        v-tip="pagingTitle"
         :value="pageInput"
         @input="onPageInput"
         @keyup.enter="commitPage"
@@ -92,7 +92,7 @@ async function commitPage() {
       />
       <button
         class="page-btn"
-        title="下一页"
+        v-tip="'下一页'"
         :disabled="pagingDisabled || !ws.pageInfo.hasMore"
         @click="ws.gotoPage(ws.pageNo + 1)"
       >›</button>
@@ -102,19 +102,19 @@ async function commitPage() {
         class="page-size"
         :value="String(ws.pageSize)"
         :disabled="pagingDisabled"
-        :title="pagingTitle"
+        v-tip="pagingTitle"
         @change="onChangePageSize"
       >
         <option v-for="opt in pageSizeOptions" :key="opt" :value="String(opt)">{{ opt }}</option>
       </select>
     </label>
     <span class="footer-status" v-html="statusHtml"></span>
-    <span v-if="ws.hasPendingEdits" class="footer-pending" title="翻页会丢弃这些未保存的修改">
+    <span v-if="ws.hasPendingEdits" class="footer-pending" v-tip="'翻页会丢弃这些未保存的修改'">
       有 {{ ws.pendingEditCount }} 个单元格修改待保存
     </span>
     <button
       class="export-link"
-      title="导出结果为 CSV（可选表头与范围）"
+      v-tip="'导出结果为 CSV（可选表头与范围）'"
       :disabled="!ws.lastSql || ws.pageInfo.idle || ws.pageInfo.write"
       @click="ui.openModal('exportModal')"
     >【数据导出】</button>

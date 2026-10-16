@@ -145,7 +145,7 @@ async function onNextPage() {
     <div class="tree-header-row">
       <IconSelect
         class="db-picker"
-        title="切换逻辑库"
+        v-tip="'切换逻辑库'"
         :model-value="connStore.currentDatabase"
         :options="dbOptions"
         @update:model-value="connStore.selectDatabase"
@@ -166,13 +166,13 @@ async function onNextPage() {
       <button
         class="key-scope-btn"
         :class="{ on: globalSearch }"
-        :title="globalSearch ? '当前在全部 key 中搜索，点击改为只筛当前页' : '当前只筛当前页，点击改为在全部 key 中搜索'"
+        v-tip="globalSearch ? '当前在全部 key 中搜索，点击改为只筛当前页' : '当前只筛当前页，点击改为在全部 key 中搜索'"
         @click="toggleScope"
       >{{ globalSearch ? '全库' : '本页' }}</button>
       <button
         class="panel-toggle"
         @click="ui.togglePanel('tree')"
-        :title="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
+        v-tip="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
       >{{ ui.panelState.tree ? '›' : '‹' }}</button>
     </div>
     <div id="keyList">
@@ -183,16 +183,16 @@ async function onNextPage() {
         :class="{ active: selectedKey === k.name }"
         @click="selectedKey = k.name"
       >
-        <ItemIcon :name="keyIcon(k.type)" :title="k.type" />
+        <ItemIcon :name="keyIcon(k.type)" v-tip="k.type" />
         <span class="key-name">{{ k.name }}</span>
       </div>
       <div v-if="!visibleKeys.length" class="key-empty">{{ emptyText }}</div>
     </div>
     <!-- 游标分页：SCAN 每次只取一页，避免大库上 KEYS 全量阻塞 -->
     <div class="tree-pager">
-      <button class="row-btn" title="上一页" :disabled="!hasPrev" @click="onPrevPage">‹</button>
-      <span class="tree-pager-info" :title="pagerText">{{ pagerText }}</span>
-      <button class="row-btn" title="下一页" :disabled="!hasNext" @click="onNextPage">›</button>
+      <button class="row-btn" v-tip="'上一页'" :disabled="!hasPrev" @click="onPrevPage">‹</button>
+      <span class="tree-pager-info" v-tip="pagerText">{{ pagerText }}</span>
+      <button class="row-btn" v-tip="'下一页'" :disabled="!hasNext" @click="onNextPage">›</button>
     </div>
   </div>
 </template>

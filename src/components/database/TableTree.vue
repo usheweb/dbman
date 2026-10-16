@@ -171,7 +171,7 @@ function onMenuSelect(item) {
     <div class="tree-header-row" :class="{ hidden: connStore.currentDatabaseList.length === 0 }">
       <IconSelect
         class="db-picker"
-        title="切换数据库"
+        v-tip="'切换数据库'"
         :model-value="connStore.currentDatabase"
         :options="dbOptions"
         searchable
@@ -185,7 +185,7 @@ function onMenuSelect(item) {
           ref="sortBtnEl"
           class="tree-sort-btn"
           :class="{ active: sortActive }"
-          :title="sortTitle"
+          v-tip="sortTitle"
           @click.stop="sortVisible = !sortVisible"
         >
           <span class="sort-arrow">⇅</span>
@@ -203,13 +203,13 @@ function onMenuSelect(item) {
       <button
         class="panel-toggle"
         @click="ui.togglePanel('tree')"
-        :title="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
+        v-tip="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
       >
         <span class="toggle-glyph">{{ ui.panelState.tree ? '›' : '‹' }}</span>
         <span class="btn-label">{{ ui.panelState.tree ? '展开' : '收起' }}</span>
       </button>
     </div>
-    <div v-if="connStore.currentDatabase" class="tree-count-row" :title="tableCountText">{{ tableCountText }}</div>
+    <div v-if="connStore.currentDatabase" class="tree-count-row" v-tip="tableCountText">{{ tableCountText }}</div>
     <div id="tableList">
       <div
         v-for="t in sortedTables"
@@ -223,7 +223,7 @@ function onMenuSelect(item) {
         <span class="tree-table-body">
           <span class="tree-table-name">{{ t.tableName }}</span>
           <span v-if="ui.viewOpts.tableComment && t.tableComment" class="tree-table-comment">{{ t.tableComment }}</span>
-          <span v-if="ui.viewOpts.tableMeta && metaOf(t)" class="tree-table-meta" :title="metaOf(t)">{{ metaOf(t) }}</span>
+          <span v-if="ui.viewOpts.tableMeta && metaOf(t)" class="tree-table-meta" v-tip="metaOf(t)">{{ metaOf(t) }}</span>
         </span>
       </div>
     </div>

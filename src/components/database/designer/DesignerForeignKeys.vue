@@ -80,7 +80,7 @@ function setRefColumns(fk, text) {
           <option v-for="a in ACTIONS" :key="a" :value="a">{{ a }}</option>
         </select>
         <span class="dz-c dz-acts">
-          <button class="dz-mini dz-danger" title="删除外键" @click="removeFk(i)">&times;</button>
+          <button class="dz-mini dz-danger" v-tip="'删除外键'" @click="removeFk(i)">&times;</button>
         </span>
       </div>
       <div class="dz-empty" v-if="!foreignKeys.length">暂无外键。</div>

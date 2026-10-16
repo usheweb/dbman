@@ -15,7 +15,7 @@ const connStore = useConnectionStore();
         <button id="addConnBtn" class="btn" @click="ui.openConnectionModal(null)">+ 新建</button>
         <button
           class="panel-toggle"
-          :title="(ui.panelState.sidebar ? '展开' : '收起') + ui.panelTitle('sidebar') + '列'"
+          v-tip="(ui.panelState.sidebar ? '展开' : '收起') + ui.panelTitle('sidebar') + '列'"
           @click="ui.togglePanel('sidebar')"
         >
           <span class="toggle-glyph">{{ ui.panelState.sidebar ? '›' : '‹' }}</span>

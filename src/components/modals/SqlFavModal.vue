@@ -70,20 +70,20 @@ function clearFavs() {
   <ModalShell :visible="ui.modals.sqlFavModal" width="900px" @close="ui.closeModal('sqlFavModal')">
     <template #title>SQL 收藏</template>
     <div class="log-tools">
-      <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="find-input" ref="searchInput" v-model="keyword" placeholder="搜索名称 / 备注 / SQL..." title="支持包含匹配与模糊匹配">
+      <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" class="find-input" ref="searchInput" v-model="keyword" placeholder="搜索名称 / 备注 / SQL..." v-tip="'支持包含匹配与模糊匹配'">
       <span class="log-count">{{ items.length }} / {{ sqlStore.sqlFavs.length }} 条</span>
       <button class="btn btn-secondary" @click="clearFavs">清空收藏</button>
     </div>
     <div class="log-list">
-      <div class="log-item" v-for="x in items" :key="x.f.id" @click="useFav(x.f.id)" title="点击载入编辑器">
+      <div class="log-item" v-for="x in items" :key="x.f.id" @click="useFav(x.f.id)" v-tip="'点击载入编辑器'">
         <div class="log-meta">
           <span class="log-type" :class="sqlStore.sqlLogClass(x.f.type)">{{ x.f.type }}</span>
           <span class="fav-name" v-html="keyword ? highlightHit(sqlStore.favDisplayName(x.f), keyword) : escapeHtml(sqlStore.favDisplayName(x.f))"></span>
           <span>{{ formatDateTime(new Date(x.f.t)) }}</span>
           <span v-if="x.f.db">库: {{ x.f.db }}</span>
           <span v-if="x.f.conn">连接: {{ x.f.conn }}</span>
-          <button class="fav-act" title="编辑名称 / 备注" @click.stop="editFav(x.f)">&#9998;</button>
-          <button class="log-del" title="删除这条收藏" @click.stop="deleteFav(x.f)">&times;</button>
+          <button class="fav-act" v-tip="'编辑名称 / 备注'" @click.stop="editFav(x.f)">&#9998;</button>
+          <button class="log-del" v-tip="'删除这条收藏'" @click.stop="deleteFav(x.f)">&times;</button>
         </div>
         <div class="fav-note" v-if="x.f.note" v-html="keyword ? highlightHit(x.f.note, keyword) : escapeHtml(x.f.note)"></div>
         <div class="log-sql" v-html="highlightSqlSyntax(x.f.sql, keyword)"></div>

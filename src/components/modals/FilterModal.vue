@@ -73,7 +73,7 @@ function apply(exec) {
             <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" v-model="row.v1" placeholder="筛选值">
           </template>
         </div>
-        <button class="f-del" title="删除该条件" @click="removeRow(i)">&times;</button>
+        <button class="f-del" v-tip="'删除该条件'" @click="removeRow(i)">&times;</button>
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 12px; margin: 12px 0 16px;">

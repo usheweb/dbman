@@ -75,7 +75,7 @@ function isPrimary(ix) {
           :value="(ix.columns || []).join(', ')" placeholder="col1, col2"
           @input="setColumns(ix, $event.target.value)">
         <span class="dz-c dz-acts">
-          <button class="dz-mini dz-danger" title="删除索引" @click="removeIndex(i)">&times;</button>
+          <button class="dz-mini dz-danger" v-tip="'删除索引'" @click="removeIndex(i)">&times;</button>
         </span>
       </div>
       <div class="dz-empty" v-if="!indexes.length">暂无索引。</div>

@@ -44,21 +44,21 @@ defineExpose({ clear });
       type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
       class="find-input"
       placeholder="在结果中查找..."
-      title="回车或点放大镜执行查找"
+      v-tip="'回车或点放大镜执行查找'"
       @keydown="onKey"
     />
-    <span class="find-count" title="匹配的单元格数">{{ ws.findState.keyword ? String(ws.matchCount) : '' }}</span>
-    <label class="find-filter" title="勾选后只显示包含查找内容的行">
+    <span class="find-count" v-tip="'匹配的单元格数'">{{ ws.findState.keyword ? String(ws.matchCount) : '' }}</span>
+    <label class="find-filter" v-tip="'勾选后只显示包含查找内容的行'">
       <input type="checkbox" :checked="ws.findState.only" @change="onToggle">过滤
     </label>
-    <button class="icon-btn find-btn" title="查找 / 下一处" @click="onFind">
+    <button class="icon-btn find-btn" v-tip="'查找 / 下一处'" @click="onFind">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="10.5" cy="10.5" r="6.5" />
         <path d="M15.5 15.5L20 20" />
       </svg>
       <span class="btn-label">查找</span>
     </button>
-    <button class="icon-btn find-btn" title="清除查找" @click="onClear">
+    <button class="icon-btn find-btn" v-tip="'清除查找'" @click="onClear">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M6 6l12 12M18 6L6 18" />
       </svg>

@@ -69,10 +69,10 @@ function formatElapsed(ms) {
           <button
             class="ai-bar-float"
             :disabled="!conn.currentTable || ai.generating"
-            :title="conn.currentTable ? '把当前表 ' + conn.currentTable + ' 插入到需求里' : '先在左侧表列表选一张表'"
+            v-tip="conn.currentTable ? '把当前表 ' + conn.currentTable + ' 插入到需求里' : '先在左侧表列表选一张表'"
             @click="onAddCurrentTable"
           >+ 当前表</button>
-          <button v-if="ai.prompt" class="ai-bar-clear" title="清空" @click="onClear">
+          <button v-if="ai.prompt" class="ai-bar-clear" v-tip="'清空'" @click="onClear">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
           </button>
         </div>
@@ -84,14 +84,14 @@ function formatElapsed(ms) {
         v-if="ai.hasSession"
         class="btn btn-secondary"
         :disabled="ai.generating"
-        title="丢弃上一轮上下文，从头生成"
+        v-tip="'丢弃上一轮上下文，从头生成'"
         @click="onRegenerate"
       >重新生成</button>
     </div>
 
     <!-- 已引用的表：让用户确认模型会看到哪些表 -->
     <div v-if="mentionedTables.length" class="ai-bar-tables">
-      <span v-for="name in mentionedTables" :key="name" class="ai-table-chip" :title="'点击移除 @' + name">
+      <span v-for="name in mentionedTables" :key="name" class="ai-table-chip" v-tip="'点击移除 @' + name">
         @{{ name }}
         <button class="ai-table-chip-x" @click="removeTable(name)">×</button>
       </span>
@@ -104,7 +104,7 @@ function formatElapsed(ms) {
       <button
         v-if="ai.steps.length"
         class="ai-bar-status-x"
-        title="清空下面的步骤明细"
+        v-tip="'清空下面的步骤明细'"
         @click="ai.clearSteps()"
       >×</button>
     </div>

@@ -32,7 +32,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           class="icon-btn"
           :disabled="!ws.lastSql || ws.busy"
-          title="刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）"
+          v-tip="'刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）'"
           @click="ws.refreshResult()"
         >
           <svg :class="{ 'icon-spin': ws.busy }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -44,7 +44,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           v-if="ws.hasPendingEdits"
           class="icon-btn"
-          :title="'放弃当前 ' + ws.pendingEditCount + ' 个未保存的单元格修改'"
+          v-tip="'放弃当前 ' + ws.pendingEditCount + ' 个未保存的单元格修改'"
           @click="ws.discardPendingEdits()"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -55,7 +55,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           v-if="ws.hasPendingEdits"
           class="icon-btn save-edit-btn"
-          :title="'把结果表中暂存的 ' + ws.pendingEditCount + ' 个单元格修改生成 UPDATE 并执行'"
+          v-tip="'把结果表中暂存的 ' + ws.pendingEditCount + ' 个单元格修改生成 UPDATE 并执行'"
           @click="ws.savePendingEdits()"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -68,7 +68,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           class="icon-btn"
           :class="{ active: ws.globalDisplay.timestamp }"
-          title="把时间戳列显示为可读时间"
+          v-tip="'把时间戳列显示为可读时间'"
           @click="ws.toggleGlobalMode('timestamp')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -80,7 +80,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           class="icon-btn"
           :class="{ active: ws.globalDisplay.enum }"
-          title="按字段注释里的枚举映射显示为文字"
+          v-tip="'按字段注释里的枚举映射显示为文字'"
           @click="ws.toggleGlobalMode('enum')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -92,7 +92,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           class="icon-btn"
           :class="{ active: ui.resultFullscreen }"
-          :title="ui.resultFullscreen ? '退出全屏（Esc）' : '全屏显示结果表（Esc 退出）'"
+          v-tip="ui.resultFullscreen ? '退出全屏（Esc）' : '全屏显示结果表（Esc 退出）'"
           @click="toggleFullscreen"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -106,7 +106,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         <button
           class="icon-btn"
           :class="{ active: !!ws.historyView }"
-          :title="'查看历史查询结果（最多保留 ' + ui.viewOpts.resultHistoryMax + ' 条）'"
+          v-tip="'查看历史查询结果（最多保留 ' + ui.viewOpts.resultHistoryMax + ' 条）'"
           @click="ui.openModal('resultHistoryModal')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

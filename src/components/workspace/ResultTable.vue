@@ -421,12 +421,12 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
     <table v-else-if="ws.lastResult && columns.length" class="data-table" :class="{ dragging }">
       <thead>
         <tr>
-          <th class="row-head" title="点击选择整行；Shift 连选；⌘/Ctrl 增减"></th>
+          <th class="row-head" v-tip="'点击选择整行；Shift 连选；⌘/Ctrl 增减'"></th>
           <th
             v-for="(col, c) in columns"
             :key="col"
             :data-col="col"
-            title="点击选择整列；Shift 连选；⌘/Ctrl 增减；右键：排序 / 筛选"
+            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；右键：排序 / 筛选'"
             @click="onClickHeader($event, col, c)"
             @contextmenu.prevent="showHeaderMenu($event, col)"
           >
@@ -434,7 +434,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             <div v-if="colComments[col]" class="col-sub">
               <div
                 class="column-comment"
-                :title="colComments[col]"
+                v-tip="colComments[col]"
                 :data-value="colComments[col]"
                 @dblclick="ui.openContent(colComments[col])"
               >{{ colComments[col] }}</div>
@@ -479,7 +479,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
           <td
             class="row-head"
             :class="{ 'row-selected': isRowSelected(r) }"
-            :title="'第 ' + (r + 1) + ' 行：点击选择整行；按住拖动可选多行；Shift 连选；⌘/Ctrl 增减；右键：编辑 / 复制 / 删除'"
+            v-tip="'第 ' + (r + 1) + ' 行：点击选择整行；按住拖动可选多行；Shift 连选；⌘/Ctrl 增减；右键：编辑 / 复制 / 删除'"
             @mousedown="onRowHeadDown($event, r)"
             @mouseenter="onRowHeadEnter(r)"
             @click="onClickRowHead($event, r)"
@@ -491,7 +491,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             :class="cellClass(ws.lastResult.data[r], col, r, c)"
             :data-value="rawText(ws.lastResult.data[r][col])"
             :data-midx="cellMidx(r, c)"
-            :title="cellTitle(ws.lastResult.data[r], col, r, c)"
+            v-tip="cellTitle(ws.lastResult.data[r], col, r, c)"
             @mousedown="onCellDown($event, r, c)"
             @mouseenter="onCellEnter(r, c)"
             @click="onClickCell($event, r, c)"
@@ -508,7 +508,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             autocapitalize="off" autocorrect="off" spellcheck="false"
             :value="editValue"
             :placeholder="ws.lastResult.data[r][col] === null || ws.lastResult.data[r][col] === undefined ? 'NULL' : ''"
-            :title="'原值：' + rawText(ws.lastResult.data[r][col])"
+            v-tip="'原值：' + rawText(ws.lastResult.data[r][col])"
             @input="onEditInput(r, c, $event)"
             @keydown.enter.stop.prevent="endEdit()"
             @keydown.esc.stop.prevent="cancelEdit(r, c)"

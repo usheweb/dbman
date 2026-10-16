@@ -32,7 +32,7 @@ const fileName = () => (csv.path ? csv.path.split(/[\\/]/).pop() : '');
       <input
         class="filter-input ci-path" type="text" readonly
         :value="csv.path" placeholder="尚未选择文件"
-        :title="csv.path"
+        v-tip="csv.path"
       >
       <button class="btn btn-secondary" :disabled="csv.importing" @click="csv.pickFile()">选择文件…</button>
     </div>

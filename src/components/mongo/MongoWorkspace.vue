@@ -221,7 +221,7 @@ const filterEl = ref(null);
     <template v-else>
       <div class="mongo-query">
         <div class="mongo-query-head">
-          <span class="mongo-target" :title="selectedCollection">
+          <span class="mongo-target" v-tip="selectedCollection">
             <ItemIcon name="collection" />
             <span class="mongo-target-name">{{ selectedCollection }}</span>
           </span>
@@ -229,18 +229,23 @@ const filterEl = ref(null);
             <button
               class="mongo-mode-btn"
               :class="{ active: mode === 'find' }"
-              title="按过滤条件查询文档"
+              v-tip="'按过滤条件查询文档'"
               @click="mode = 'find'"
             >find</button>
             <button
               class="mongo-mode-btn"
               :class="{ active: mode === 'aggregate' }"
-              title="按聚合管道查询文档"
+              v-tip="'按聚合管道查询文档'"
               @click="mode = 'aggregate'"
             >aggregate</button>
           </div>
           <span class="mongo-spacer"></span>
-          <button class="btn" :disabled="ws.busy" @click="run">{{ ws.busy ? '执行中…' : '执行' }}</button>
+          <!-- 作用框提示挪到原来「执行」的位置：右对齐，切换作用框时不影响左边任何东西 -->
+          <span
+            v-if="mode === 'find'"
+            class="mongo-target-hint"
+            v-tip="`点字段名只改高亮的那个框：点进要编辑的输入框即可切换（当前是「${TARGET_LABEL[chipTarget]}」）`"
+          >作用于 {{ TARGET_LABEL[chipTarget] }}</span>
         </div>
         <div v-if="mode === 'find'" class="mongo-find">
           <div class="mongo-fields">
@@ -259,10 +264,18 @@ const filterEl = ref(null);
           </div>
           <!-- 点字段名就能改三个框里的 JSON，不必手打字段名；写回的都是能直接跑的写法，也能反过来手改文本框 -->
           <div class="proj-bar">
-            <span
-              class="proj-bar-target"
-              :title="`点字段名只改高亮的那个框：点进要编辑的输入框即可切换（当前是「${TARGET_LABEL[chipTarget]}」）`"
-            >作用于 {{ TARGET_LABEL[chipTarget] }}</span>
+            <!-- 执行按钮挪到这一排最前面：默认只露播放图标，鼠标移上去才展开「执行 / 执行中…」 -->
+            <button
+              class="btn mongo-run"
+              :disabled="ws.busy"
+              v-tip="ws.busy ? '执行中…' : '执行'"
+              @click="run"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 3.4v9.2l8-4.6-8-4.6Z" />
+              </svg>
+              <span class="mongo-run-text">{{ ws.busy ? '执行中…' : '执行' }}</span>
+            </button>
             <template v-if="chipInfos.length">
               <button
                 v-for="c in chipInfos"
@@ -270,7 +283,7 @@ const filterEl = ref(null);
                 type="button"
                 class="proj-chip"
                 :class="c.cls"
-                :title="c.title"
+                v-tip="c.title"
                 @click.stop.prevent="onChipClick(c.name)"
               >{{ c.name }}{{ c.suffix }}</button>
             </template>
@@ -279,7 +292,7 @@ const filterEl = ref(null);
               v-if="chipTarget === 'projection' && projectionText.trim()"
               type="button"
               class="proj-chip proj-chip-all"
-              title="清空字段筛选，恢复显示全部字段"
+              v-tip="'清空字段筛选，恢复显示全部字段'"
               @click.stop.prevent="projectionText = ''"
             >全部字段</button>
             <span v-if="targetInvalid" class="proj-bar-warn">当前输入框不是合法 JSON，点选已停用</span>
@@ -390,18 +403,49 @@ const filterEl = ref(null);
   gap: 6px;
 }
 
-/* 作用框提示：不再摆一排可点的 tab，跟着输入框焦点自动切换。
+/* 作用框提示已挪到查询头部右侧、与「执行」按钮对调了位置。
    min-width 按最长的「作用于 字段筛选 projection」定死：三种作用框的提示文案长短不同，
-   不固定的话一切换作用框，右边的字段标签就整体横移，看着像在跳 */
-.proj-bar-target {
+   不固定的话一切换作用框就跟着变宽变窄，看着像在跳 */
+.mongo-target-hint {
   flex: 0 0 auto;
   min-width: 156px;
-  margin-right: 2px;
   color: var(--text-dim);
   font-size: 11px;
   letter-spacing: .5px;
   white-space: nowrap;
-  text-align: left;
+  text-align: right;
+}
+
+/* 执行按钮挪到字段点选这一排最前面：默认只露播放图标，鼠标移上去才展开文字。
+   :disabled（执行中）也保持展开，否则用户看不到「执行中…」的反馈 */
+.mongo-run {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0;
+  padding: 5px 9px;
+  letter-spacing: .5px;
+}
+
+.mongo-run svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+.mongo-run-text {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: max-width .2s ease, opacity .2s ease, margin-left .2s ease;
+}
+
+.mongo-run:hover .mongo-run-text,
+.mongo-run:disabled .mongo-run-text {
+  max-width: 74px;
+  margin-left: 6px;
+  opacity: 1;
 }
 
 /* 字段标签：青色=已启用，虚线灰=未启用；点一下切换，不用手写 JSON */

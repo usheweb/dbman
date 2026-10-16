@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import { useThemeStore } from './stores/theme';
+import { initTip, vTip } from './composables/tip';
 
 // ===== 字体本地化 =====
 // 原来走 Google Fonts CDN，桌面端离线不可用，改为 @fontsource 打包进产物。
@@ -28,6 +29,9 @@ import './assets/styles/theme.css';
 const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
+// 全项目统一的自定义气泡提示（替代原生 title），见 composables/tip.js
+app.directive('tip', vTip);
+initTip();
 // 挂载前同步一次主题（index.html 内联脚本已提前设置，这里兜底并同步 store 状态）
 useThemeStore(pinia).init();
 app.mount('#app');

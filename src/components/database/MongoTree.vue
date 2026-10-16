@@ -58,7 +58,7 @@ watch(
     <div class="tree-header-row">
       <IconSelect
         class="db-picker"
-        title="切换数据库"
+        v-tip="'切换数据库'"
         :model-value="connStore.currentDatabase"
         :options="dbOptions"
         searchable
@@ -78,10 +78,10 @@ watch(
       <button
         class="panel-toggle"
         @click="ui.togglePanel('tree')"
-        :title="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
+        v-tip="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
       >{{ ui.panelState.tree ? '›' : '‹' }}</button>
     </div>
-    <div v-if="connStore.currentDatabase" class="tree-count-row" :title="countText">{{ countText }}</div>
+    <div v-if="connStore.currentDatabase" class="tree-count-row" v-tip="countText">{{ countText }}</div>
     <div id="collectionList">
       <div
         v-for="c in filtered"

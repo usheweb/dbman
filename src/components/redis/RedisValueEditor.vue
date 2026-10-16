@@ -169,9 +169,9 @@ function submit() {
           class="redis-row-input"
           :placeholder="'元素 ' + (row.index + 1)"
         >
-        <button v-if="type === 'list'" class="row-btn" title="上移" :disabled="row.index === 0" @click="move(row.index, -1)">↑</button>
-        <button v-if="type === 'list'" class="row-btn" title="下移" :disabled="row.index === draft.length - 1" @click="move(row.index, 1)">↓</button>
-        <button class="row-btn danger" title="删除该行" @click="removeRow(row.index)">×</button>
+        <button v-if="type === 'list'" class="row-btn" v-tip="'上移'" :disabled="row.index === 0" @click="move(row.index, -1)">↑</button>
+        <button v-if="type === 'list'" class="row-btn" v-tip="'下移'" :disabled="row.index === draft.length - 1" @click="move(row.index, 1)">↓</button>
+        <button class="row-btn danger" v-tip="'删除该行'" @click="removeRow(row.index)">×</button>
       </div>
       <div v-if="!visibleRows.length" class="redis-editor-empty">无匹配元素</div>
     </div>
@@ -192,7 +192,7 @@ function submit() {
           class="redis-row-input score"
           placeholder="分值"
         >
-        <button class="row-btn danger" title="删除该行" @click="removeRow(row.index)">×</button>
+        <button class="row-btn danger" v-tip="'删除该行'" @click="removeRow(row.index)">×</button>
       </div>
       <div v-if="!visibleRows.length" class="redis-editor-empty">无匹配元素</div>
     </div>
@@ -212,7 +212,7 @@ function submit() {
           class="redis-row-input"
           placeholder="值"
         >
-        <button class="row-btn danger" title="删除该行" @click="removeRow(row.index)">×</button>
+        <button class="row-btn danger" v-tip="'删除该行'" @click="removeRow(row.index)">×</button>
       </div>
       <div v-if="!visibleRows.length" class="redis-editor-empty">无匹配元素</div>
     </div>

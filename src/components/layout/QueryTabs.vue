@@ -21,7 +21,7 @@ const ctx = computed(() => {
       :key="t.id"
       class="conn-tab query-tab"
       :class="{ active: t.id === ws.activeTabId }"
-      :title="ctx ? t.name + '（' + ctx + '）' : t.name"
+      v-tip="ctx ? t.name + '（' + ctx + '）' : t.name"
       @click="ws.activateQueryTab(t.id)"
     >
       <svg class="conn-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">
@@ -32,11 +32,11 @@ const ctx = computed(() => {
       <span
         v-if="ws.activeTabs.length > 1"
         class="conn-tab-close"
-        title="关闭查询"
+        v-tip="'关闭查询'"
         @click.stop="ws.closeQueryTab(t.id)"
       >×</span>
     </button>
-    <button class="query-tab-add" title="新建查询" @click="ws.newQueryTab()">
+    <button class="query-tab-add" v-tip="'新建查询'" @click="ws.newQueryTab()">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
         <path d="M8 3.5v9M3.5 8h9" />
       </svg>

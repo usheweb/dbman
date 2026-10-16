@@ -34,7 +34,7 @@ function cellValue(row, i) {
           <tr>
             <th class="cm-idx">#</th>
             <th v-for="(h, i) in headers" :key="i" class="cm-col">
-              <div class="cm-head-name" :title="h">{{ h }}</div>
+              <div class="cm-head-name" v-tip="h">{{ h }}</div>
               <select
                 class="cm-select"
                 :class="{ 'cm-dup': isDuplicate(i) }"
@@ -50,7 +50,7 @@ function cellValue(row, i) {
         <tbody>
           <tr v-for="(row, r) in rows" :key="r">
             <td class="cm-idx">{{ r + 1 }}</td>
-            <td v-for="(h, i) in headers" :key="i" :title="row[i]">{{ cellValue(row, i) }}</td>
+            <td v-for="(h, i) in headers" :key="i" v-tip="row[i]">{{ cellValue(row, i) }}</td>
           </tr>
         </tbody>
       </table>

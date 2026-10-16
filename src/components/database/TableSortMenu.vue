@@ -112,7 +112,7 @@ function reset() {
     <div ref="panelEl" class="sort-panel" :style="{ left: left + 'px', top: top + 'px' }">
       <div class="sort-head">
         <span>排序（前者优先）</span>
-        <button class="sort-close" title="关闭" @click="emit('close')">✕</button>
+        <button class="sort-close" v-tip="'关闭'" @click="emit('close')">✕</button>
       </div>
 
       <div class="sort-list">
@@ -127,24 +127,24 @@ function reset() {
           />
           <button
             class="sort-btn sort-text"
-            :title="k.dir === 'asc' ? '当前升序，点击切换为降序' : '当前降序，点击切换为升序'"
+            v-tip="k.dir === 'asc' ? '当前升序，点击切换为降序' : '当前降序，点击切换为升序'"
             @click="toggleDir(i)"
           >{{ k.dir === 'asc' ? '升序' : '降序' }}</button>
           <button
             class="sort-btn sort-text"
             :disabled="keys.length < 2"
-            :title="keys.length < 2
+            v-tip="keys.length < 2
               ? '只有一个排序维度，无需调整顺序'
               : (i === 0 ? '下移一位，降低该维度的排序优先级' : '上移一位，提高该维度的排序优先级')"
             @click="move(i, i === 0 ? 1 : -1)"
           >{{ i === 0 ? '下移' : '上移' }}</button>
-          <button class="sort-btn sort-remove" title="移除该排序维度" @click="removeKey(i)">✕</button>
+          <button class="sort-btn sort-remove" v-tip="'移除该排序维度'" @click="removeKey(i)">✕</button>
         </div>
       </div>
 
       <div class="sort-foot">
         <button class="sort-btn" :disabled="!canAdd" @click="addKey">+ 添加排序维度</button>
-        <button class="sort-btn" title="恢复为按表名升序" @click="reset">重置</button>
+        <button class="sort-btn" v-tip="'恢复为按表名升序'" @click="reset">重置</button>
       </div>
     </div>
   </Teleport>

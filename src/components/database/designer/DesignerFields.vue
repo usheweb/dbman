@@ -189,7 +189,7 @@ const isLastRow = i => i === props.columns.length - 1;
         <span class="dz-cell">
           <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
             v-model="c.name" placeholder="字段名" @input="touch">
-          <span v-if="c.columnKey" class="dz-key" :title="KEY_LABEL[c.columnKey]">{{ c.columnKey }}</span>
+          <span v-if="c.columnKey" class="dz-key" v-tip="KEY_LABEL[c.columnKey]">{{ c.columnKey }}</span>
         </span>
         <span class="dz-type">
           <IconSelect
@@ -206,7 +206,7 @@ const isLastRow = i => i === props.columns.length - 1;
             type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
             :value="typeArgs(c.columnType)"
             :placeholder="argsPlaceholder(c)"
-            :title="argsPlaceholder(c)"
+            v-tip="argsPlaceholder(c)"
             @input="setTypeArgs(c, $event.target.value)"
           >
         </span>
@@ -226,9 +226,9 @@ const isLastRow = i => i === props.columns.length - 1;
           <input type="checkbox" :checked="hasOnUpdate(c)" @change="setFlags(c, hasAutoInc(c), $event.target.checked)">
         </span>
         <span class="dz-c dz-acts">
-          <button class="dz-mini" title="上移" :disabled="isFirstRow(i)" @click="move(i, -1)">&#9650;</button>
-          <button class="dz-mini" title="下移" :disabled="isLastRow(i)" @click="move(i, 1)">&#9660;</button>
-          <button class="dz-mini dz-danger" title="删除字段" @click="removeColumn(i)">&times;</button>
+          <button class="dz-mini" v-tip="'上移'" :disabled="isFirstRow(i)" @click="move(i, -1)">&#9650;</button>
+          <button class="dz-mini" v-tip="'下移'" :disabled="isLastRow(i)" @click="move(i, 1)">&#9660;</button>
+          <button class="dz-mini dz-danger" v-tip="'删除字段'" @click="removeColumn(i)">&times;</button>
         </span>
       </div>
       <div class="dz-empty" v-if="!columns.length">暂无字段，点击「+ 添加字段」新增。</div>

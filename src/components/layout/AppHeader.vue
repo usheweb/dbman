@@ -80,7 +80,7 @@ async function purgeSecrets() {
       />
       <button
         class="icon-btn theme-toggle"
-        :title="theme.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
+        v-tip="theme.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
         @click="theme.toggle()"
       >
         <!-- 暗色显示太阳（点击切亮色），亮色显示月亮（点击切暗色） -->
@@ -96,7 +96,7 @@ async function purgeSecrets() {
         ref="settingsBtnEl"
         class="icon-btn"
         :class="{ open: settingsVisible }"
-        title="设置"
+        v-tip="'设置'"
         @mousedown.stop
         @click.stop="openSettingsMenu"
       >

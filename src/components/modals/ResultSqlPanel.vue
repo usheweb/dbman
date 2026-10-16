@@ -122,7 +122,7 @@ async function copyOut() {
             <span
               class="rsq-name"
               :class="{ 'rsq-generated': ctx.generated.has(col) }"
-              :title="ctx.generated.has(col) ? '生成列：不会写入语句' : col"
+              v-tip="ctx.generated.has(col) ? '生成列：不会写入语句' : col"
             >{{ col }}</span>
             <input
               class="rsq-input"
@@ -136,7 +136,7 @@ async function copyOut() {
             <button
               class="rsq-mini"
               :class="{ active: overrides[col].asNull }"
-              title="该列批量改写为 NULL"
+              v-tip="'该列批量改写为 NULL'"
               @click="overrides[col].asNull = !overrides[col].asNull; overrides[col].on = true"
             >NULL</button>
           </div>
@@ -166,10 +166,10 @@ async function copyOut() {
             <button
               class="rsq-mini"
               :class="{ active: x.asNull }"
-              title="该新增列写为 NULL"
+              v-tip="'该新增列写为 NULL'"
               @click="x.asNull = !x.asNull"
             >NULL</button>
-            <button class="rsq-mini rsq-del" title="删除该新增列" @click="removeExtraCol(i)">&times;</button>
+            <button class="rsq-mini rsq-del" v-tip="'删除该新增列'" @click="removeExtraCol(i)">&times;</button>
           </div>
           <div v-if="!extraCols.length" class="rsq-empty">暂无新增列</div>
         </div>

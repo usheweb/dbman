@@ -16,6 +16,7 @@ import { useThemeStore } from '@/stores/theme';
 import * as api from '@/api';
 import { formatSql } from '@/utils/sql';
 import { showSqlHint } from '@/composables/useSqlHint';
+import { setTip } from '@/composables/tip';
 
 const ws = useWorkspaceStore();
 const ui = useUiStore();
@@ -33,7 +34,8 @@ const RUN_GUTTER = 'run-gutter';
 function runMarker() {
   const el = document.createElement('span');
   el.className = 'run-gutter-btn';
-  el.title = '执行这一行 SQL';
+  // gutter marker 是 JS 现造的 DOM，指令用不上，走 setTip 挂同款自定义气泡
+  setTip(el, '执行这一行 SQL');
   el.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
   return el;
 }
@@ -205,19 +207,19 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
     <div class="editor-header">
       <span>SQL编辑器</span>
       <div class="editor-toolbar">
-        <button class="icon-btn" title="打开 SQL 文件" @click="openSqlFile">
+        <button class="icon-btn" v-tip="'打开 SQL 文件'" @click="openSqlFile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           </svg>
           <span class="btn-label">打开文件</span>
         </button>
-        <button class="icon-btn" title="SQL 收藏列表" @click="ui.openModal('sqlFavModal')">
+        <button class="icon-btn" v-tip="'SQL 收藏列表'" @click="ui.openModal('sqlFavModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" />
           </svg>
           <span class="btn-label">收藏列表</span>
         </button>
-        <button class="icon-btn" title="SQL 日志列表" @click="ui.openModal('sqlLogModal')">
+        <button class="icon-btn" v-tip="'SQL 日志列表'" @click="ui.openModal('sqlLogModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
             <path d="M3 4v4h4" />
@@ -225,13 +227,13 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
           </svg>
           <span class="btn-label">SQL 日志</span>
         </button>
-        <button class="icon-btn" title="收藏当前 SQL" @click="openFavFromEditor">
+        <button class="icon-btn" v-tip="'收藏当前 SQL'" @click="openFavFromEditor">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.8l5.8-.9z" />
           </svg>
           <span class="btn-label">收藏</span>
         </button>
-        <button class="icon-btn" title="格式化 SQL" @click="onFormat">
+        <button class="icon-btn" v-tip="'格式化 SQL'" @click="onFormat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 6h16" />
             <path d="M4 12h9" />
@@ -239,15 +241,15 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
           </svg>
           <span class="btn-label">格式化</span>
         </button>
-        <button class="icon-btn exec-btn" title="执行 SQL（Ctrl+Enter）" @click="ws.executeQuery()">
+        <button class="icon-btn exec-btn" v-tip="'执行 SQL（Ctrl+Enter）'" @click="ws.executeQuery()">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M8 5v14l11-7z" />
           </svg>
-          <span class="btn-label">执行 <span class="kbd">Ctrl+Enter</span></span>
+          <span class="btn-label">执行</span>
         </button>
         <button
           class="icon-btn"
-          :title="ui.viewOpts.sqlCollapsed ? '展开 SQL 编辑器' : '收起 SQL 编辑器，把空间让给结果区'"
+          v-tip="ui.viewOpts.sqlCollapsed ? '展开 SQL 编辑器' : '收起 SQL 编辑器，把空间让给结果区'"
           @click="ui.toggleSqlCollapsed()"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

@@ -20,7 +20,7 @@ watch(() => ws.cellEdit.visible, async (visible) => {
     <div class="export-body">
       <div class="cell-edit-head">
         <div class="cell-edit-col">{{ ws.cellEdit.table ? ws.cellEdit.table + '.' : '' }}{{ ws.cellEdit.col }}</div>
-        <div class="cell-edit-original" :title="ws.cellEdit.original">原值：{{ ws.cellEdit.original || '（空）' }}</div>
+        <div class="cell-edit-original" v-tip="ws.cellEdit.original">原值：{{ ws.cellEdit.original || '（空）' }}</div>
       </div>
     </div>
     <textarea

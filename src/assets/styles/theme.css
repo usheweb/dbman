@@ -1543,18 +1543,6 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        /* 快捷键小标签：跟随 .btn-label 一起展开 */
-        .icon-btn .btn-label .kbd {
-            margin-left: 6px;
-            padding: 1px 5px;
-            border: 1px solid var(--line);
-            border-radius: 4px;
-            background: rgba(var(--void-rgb), .6);
-            color: var(--text-dim);
-            font-family: var(--font-mono);
-            font-size: 10px;
-            letter-spacing: 0;
-        }
         /* 结果区工具条的选中态：开关型功能（时间戳/枚举/全屏）开启后保持高亮 */
         .result-tools .icon-btn.active {
             color: var(--cyan);
@@ -3077,4 +3065,67 @@
             justify-content: flex-end;
             gap: 10px;
             padding-top: 12px;
+        }
+        /* ===== 全项目统一的自定义气泡提示（替代原生 title）=====
+           DOM 是 composables/tip.js 里的单例宿主，模板里用指令 v-tip 提供文案。
+           位置由 JS 算好写进 inline style（fixed 定位，溢出隐藏的容器也压不住），
+           这里只管外观；亮/暗两套主题靠既有通道变量自动跟随，不新增令牌。 */
+        .dbman-tip {
+            position: fixed;
+            z-index: 3200;
+            left: 0;
+            top: 0;
+            max-width: 360px;
+            padding: 7px 11px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            /* 近不透明底：气泡叠在表格/编辑器上时必须压得住底下的字 */
+            background: rgba(var(--ink-3-rgb), .98);
+            box-shadow: 0 10px 26px rgba(var(--shadow-rgb), .35), var(--glow-cyan);
+            color: var(--text);
+            font-family: var(--font-ui);
+            font-size: 12px;
+            font-weight: 500;
+            /* 中文文案：字距不能超过 1px */
+            letter-spacing: .3px;
+            line-height: 1.55;
+            text-align: left;
+            white-space: normal;
+            word-break: break-word;
+            opacity: 0;
+            /* 收着的时候朝目标方向缩一点，出现时再推到位 */
+            transform: translateY(4px);
+            /* 纯展示层：不吃鼠标事件，免得挡住底下的按钮 */
+            pointer-events: none;
+            transition: opacity .16s ease, transform .16s ease;
+        }
+        .dbman-tip.above {
+            transform: translateY(-4px);
+        }
+        .dbman-tip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* 超长文案（整行数据、完整路径）按视口高度截断，避免气泡顶出屏幕 */
+        .dbman-tip-text {
+            display: block;
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+        /* 指向目标的小箭头：8px 方块转 45°，只留两条边的描边；
+           压在气泡边缘上盖住那段边框，看起来就像气泡长出了一个尖 */
+        .dbman-tip-caret {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-style: solid;
+            border-width: 1px;
+            background: rgba(var(--ink-3-rgb), .98);
+            transform: rotate(45deg);
+        }
+        .dbman-tip.above .dbman-tip-caret {
+            border-color: transparent var(--line-strong) var(--line-strong) transparent;
+        }
+        .dbman-tip:not(.above) .dbman-tip-caret {
+            border-color: var(--line-strong) transparent transparent var(--line-strong);
         }
