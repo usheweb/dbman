@@ -19,7 +19,6 @@ const connStore = useConnectionStore();
           @click="ui.togglePanel('sidebar')"
         >
           <span class="toggle-glyph">{{ ui.panelState.sidebar ? '›' : '‹' }}</span>
-          <span class="btn-label">{{ ui.panelState.sidebar ? '展开' : '收起' }}</span>
         </button>
       </div>
     </div>

@@ -206,7 +206,6 @@ function onMenuSelect(item) {
         v-tip="(ui.panelState.tree ? '展开' : '收起') + ui.panelTitle('tree') + '列'"
       >
         <span class="toggle-glyph">{{ ui.panelState.tree ? '›' : '‹' }}</span>
-        <span class="btn-label">{{ ui.panelState.tree ? '展开' : '收起' }}</span>
       </button>
     </div>
     <div v-if="connStore.currentDatabase" class="tree-count-row" v-tip="tableCountText">{{ tableCountText }}</div>

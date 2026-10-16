@@ -355,9 +355,8 @@
         }
         /* 侧栏按钮悬停文案：按钮本体只留图标，文字做成「绝对定位浮标」弹出，
            完全脱离文档流——既不撑宽按钮、不推移相邻元素，也不会被窄栏裁切。
-           .panel-toggle 与 .tree-sort-btn 复用同一套显示 / 延迟收起逻辑。
-           展开态浮标挂在按钮正下方（右对齐，始终落在面板内，避开面板的 overflow 裁切）。 */
-        .panel-toggle .btn-label,
+           展开态浮标挂在按钮正下方（右对齐，始终落在面板内，避开面板的 overflow 裁切）。
+           （面板折叠按钮 .panel-toggle 已去掉文字，只留箭头 + 悬浮提示，不再走这套浮标） */
         .tree-sort-btn .btn-label {
             display: block;
             position: absolute;
@@ -387,22 +386,11 @@
             /* 鼠标移开后延迟 500ms 再收起 */
             transition-delay: 500ms;
         }
-        .panel-toggle:hover .btn-label,
-        .panel-toggle:focus-visible .btn-label,
         .tree-sort-btn:hover .btn-label,
         .tree-sort-btn:focus-visible .btn-label {
             opacity: 1;
             /* 展开即时，延迟只作用于收起 */
             transition-delay: 0s;
-        }
-        /* 收起态：面板只剩 46px 宽的一个箭头，浮标落在面板内会被裁掉，
-           改为从按钮右侧弹出到面板外（收起态悬停时放开面板裁切，见下） */
-        .sidebar.collapsed .sidebar-header .panel-toggle .btn-label,
-        .db-tree.collapsed .tree-filter-row .panel-toggle .btn-label {
-            right: auto;
-            left: calc(100% + 8px);
-            top: 50%;
-            transform: translateY(-50%);
         }
         /* 悬停收起态面板时放开裁切并抬高层级，浮层文字才能盖住相邻面板 */
         .sidebar.collapsed:hover,
@@ -1180,12 +1168,15 @@
             border-radius: 50%;
             background: var(--text-dim);
             color: rgb(var(--void-rgb));
-            font-size: 11px;
-            font-weight: 700;
-            line-height: 1;
             opacity: 0;
             transform: scale(.75);
             transition: opacity .16s ease, transform .16s ease, background .16s ease;
+        }
+        /* 叉号用 SVG 画（不用 × 字形）：字形墨迹按字体度量摆放，在圆钮里看着不居中 */
+        .conn-tab-close svg {
+            display: block;
+            width: 10px;
+            height: 10px;
         }
         .conn-tab:hover .conn-tab-close {
             opacity: 1;

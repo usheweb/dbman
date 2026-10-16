@@ -19,7 +19,11 @@ const conn = useConnectionStore();
     >
       <ItemIcon class="conn-tab-icon" :name="t.type" />
       <span class="conn-tab-name">{{ t.name }}</span>
-      <span class="conn-tab-close" v-tip="'关闭连接'" @click.stop="conn.closeTab(t.id)">×</span>
+      <span class="conn-tab-close" v-tip="'关闭连接'" @click.stop="conn.closeTab(t.id)">
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M2.2 2.2 7.8 7.8M7.8 2.2 2.2 7.8" />
+        </svg>
+      </span>
     </button>
   </div>
 </template>

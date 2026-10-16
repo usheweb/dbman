@@ -34,7 +34,11 @@ const ctx = computed(() => {
         class="conn-tab-close"
         v-tip="'关闭查询'"
         @click.stop="ws.closeQueryTab(t.id)"
-      >×</span>
+      >
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M2.2 2.2 7.8 7.8M7.8 2.2 2.2 7.8" />
+        </svg>
+      </span>
     </button>
     <button class="query-tab-add" v-tip="'新建查询'" @click="ws.newQueryTab()">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
