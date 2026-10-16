@@ -79,6 +79,12 @@ async fn connect(state: State<'_, AppState>, payload: ConnectRequest) -> Result<
     let mut host = target_host.clone();
     let mut port = target_port;
 
+    // 主机为空时各驱动的报错五花八门（MongoDB 驱动抛 "the hostname cannot be empty"），
+    // 在这里统一给一句中文提示，前端漏校验时也不会露出驱动的原始文案
+    if !is_file_based && host.trim().is_empty() {
+        return Err("请填写主机地址（本机数据库可填 localhost）".to_string());
+    }
+
     if ssh_cfg.enabled && !is_file_based {
         let ssh_host = ssh_cfg.host.clone().unwrap_or_default();
         let ssh_port = ssh_cfg.port.unwrap_or(22);

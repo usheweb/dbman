@@ -106,7 +106,9 @@ function fillForm() {
   const conn = ui.connModalTarget;
   form.name = conn ? conn.name : '';
   form.type = conn ? conn.type : 'mysql';
-  form.host = conn ? conn.host : '';
+  // 新建时默认 localhost：输入框的占位提示看起来就像已填好，实际是空值，
+  // 用户直接点「测试连接」会拿到驱动的英文报错（如 MongoDB 的 the hostname cannot be empty）
+  form.host = conn ? conn.host : 'localhost';
   form.port = conn && conn.port ? conn.port : defaultPort(form.type);
   form.user = conn ? conn.user : '';
   form.database = conn ? (conn.database || '') : '';
@@ -196,9 +198,14 @@ async function pickSqliteFile() {
   if (picked) form.database = picked;
 }
 
-// 用户名必填针对需要认证的关系型库：留空时会按匿名账号登录，只能看到极少数系统库。
-// SQLite 为本地文件，Redis 走密码认证（后端固定不带用户名），所以不校验用户名。
+// 校验顺序：先主机再用户名。「测试连接」按钮不走表单提交，HTML 的 required 拦不住它
 function validate() {
+  if (!isFileBased(form.type) && !form.host.trim()) {
+    ui.showToast('请填写主机地址（本机数据库填 localhost 或 127.0.0.1）', 'error');
+    return false;
+  }
+  // 用户名必填针对需要认证的关系型库：留空时会按匿名账号登录，只能看到极少数系统库。
+  // SQLite 为本地文件，Redis 走密码认证（后端固定不带用户名），所以不校验用户名。
   if (needsAuth(form.type) && !form.user.trim()) {
     const example = DEFAULT_USERS[form.type];
     ui.showToast(
