@@ -353,51 +353,6 @@
             font-size: 10px;
             opacity: .9;
         }
-        /* 侧栏按钮悬停文案：按钮本体只留图标，文字做成「绝对定位浮标」弹出，
-           完全脱离文档流——既不撑宽按钮、不推移相邻元素，也不会被窄栏裁切。
-           展开态浮标挂在按钮正下方（右对齐，始终落在面板内，避开面板的 overflow 裁切）。
-           （面板折叠按钮 .panel-toggle 已去掉文字，只留箭头 + 悬浮提示，不再走这套浮标） */
-        .tree-sort-btn .btn-label {
-            display: block;
-            position: absolute;
-            right: 0;
-            top: calc(100% + 6px);
-            width: max-content;
-            max-width: none;
-            margin-left: 0;
-            padding: 3px 8px;
-            border: 1px solid var(--line-strong);
-            border-radius: 6px;
-            background: var(--panel);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            box-shadow: var(--glow-cyan);
-            color: var(--cyan);
-            font-family: var(--font-cjk);
-            font-size: 12px;
-            font-weight: 500;
-            letter-spacing: 0;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            /* 抬到同层定位兄弟（如 .connection-item）之上，浮标才不会被盖住 */
-            z-index: 1;
-            transition: opacity .16s ease;
-            /* 鼠标移开后延迟 500ms 再收起 */
-            transition-delay: 500ms;
-        }
-        .tree-sort-btn:hover .btn-label,
-        .tree-sort-btn:focus-visible .btn-label {
-            opacity: 1;
-            /* 展开即时，延迟只作用于收起 */
-            transition-delay: 0s;
-        }
-        /* 悬停收起态面板时放开裁切并抬高层级，浮层文字才能盖住相邻面板 */
-        .sidebar.collapsed:hover,
-        .db-tree.collapsed:hover {
-            overflow: visible;
-            z-index: 20;
-        }
         /* 表列表上方的数量统计：无过滤词给全量，有过滤词给「命中 / 总数」 */
         .tree-count-row {
             max-height: 20px;

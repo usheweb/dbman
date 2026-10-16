@@ -190,7 +190,6 @@ function onMenuSelect(item) {
         >
           <span class="sort-arrow">⇅</span>
           <span v-if="sortKeys.length > 1" class="sort-badge">{{ sortKeys.length }}</span>
-          <span class="btn-label">排序</span>
         </button>
         <TableSortMenu
           v-if="sortVisible"
