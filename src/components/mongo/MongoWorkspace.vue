@@ -390,13 +390,18 @@ const filterEl = ref(null);
   gap: 6px;
 }
 
-/* 作用框提示：不再摆一排可点的 tab，跟着输入框焦点自动切换 */
+/* 作用框提示：不再摆一排可点的 tab，跟着输入框焦点自动切换。
+   min-width 按最长的「作用于 字段筛选 projection」定死：三种作用框的提示文案长短不同，
+   不固定的话一切换作用框，右边的字段标签就整体横移，看着像在跳 */
 .proj-bar-target {
   flex: 0 0 auto;
+  min-width: 156px;
   margin-right: 2px;
   color: var(--text-dim);
   font-size: 11px;
   letter-spacing: .5px;
+  white-space: nowrap;
+  text-align: left;
 }
 
 /* 字段标签：青色=已启用，虚线灰=未启用；点一下切换，不用手写 JSON */
