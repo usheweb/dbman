@@ -66,18 +66,17 @@ const fieldChips = computed(() => {
   return names;
 });
 
-// 字段点选这一排作用于哪个输入框：三个框都能点，默认字段筛选
+// 字段点选作用于哪个输入框：跟着「正在编辑的那个框」走 —— 点进哪个框就作用于哪个，
+// 焦点离开（比如去点字段标签）后仍保留上次编辑的框，默认是字段筛选
 const chipTarget = ref('projection');
-const CHIP_TARGETS = [
-  { value: 'filter', label: '过滤' },
-  { value: 'sort', label: '排序' },
-  { value: 'projection', label: '筛选' }
-];
-const CHIP_TARGET_TIP = {
-  filter: '字段点选作用于「过滤条件 filter」',
-  sort: '字段点选作用于「排序 sort」',
-  projection: '字段点选作用于「字段筛选 projection」'
+const TARGET_LABEL = {
+  filter: '过滤条件 filter',
+  sort: '排序 sort',
+  projection: '字段筛选 projection'
 };
+function setChipTarget(value) {
+  chipTarget.value = value;
+}
 const CHIP_BAD_TIP = '当前输入框不是合法 JSON，先修正后再点选';
 
 // 当前作用框的 JSON 写坏了：不按用户输入猜，直接停用点选，避免覆盖用户正写的内容
@@ -245,31 +244,25 @@ const filterEl = ref(null);
         </div>
         <div v-if="mode === 'find'" class="mongo-find">
           <div class="mongo-fields">
-            <label class="mongo-field">
+            <label class="mongo-field" :class="{ 'field-active': chipTarget === 'filter' }">
               <span class="mongo-field-label">过滤条件 filter</span>
-              <textarea ref="filterEl" v-model="filterText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"status":"active"}'></textarea>
+              <textarea ref="filterEl" v-model="filterText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"status":"active"}' @focus="setChipTarget('filter')"></textarea>
             </label>
-            <label class="mongo-field">
+            <label class="mongo-field" :class="{ 'field-active': chipTarget === 'sort' }">
               <span class="mongo-field-label">排序 sort</span>
-              <textarea v-model="sortText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"_id":1} 留空不排序'></textarea>
+              <textarea v-model="sortText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"_id":1} 留空不排序' @focus="setChipTarget('sort')"></textarea>
             </label>
-            <label class="mongo-field">
+            <label class="mongo-field" :class="{ 'field-active': chipTarget === 'projection' }">
               <span class="mongo-field-label">字段筛选 projection</span>
-              <textarea v-model="projectionText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"name":1,"_id":0} 留空取全部字段'></textarea>
+              <textarea v-model="projectionText" rows="2" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"name":1,"_id":0} 留空取全部字段' @focus="setChipTarget('projection')"></textarea>
             </label>
           </div>
           <!-- 点字段名就能改三个框里的 JSON，不必手打字段名；写回的都是能直接跑的写法，也能反过来手改文本框 -->
           <div class="proj-bar">
-            <div class="mongo-mode chip-target">
-              <button
-                v-for="t in CHIP_TARGETS"
-                :key="t.value"
-                class="mongo-mode-btn"
-                :class="{ active: chipTarget === t.value }"
-                :title="CHIP_TARGET_TIP[t.value]"
-                @click="chipTarget = t.value"
-              >{{ t.label }}</button>
-            </div>
+            <span
+              class="proj-bar-target"
+              :title="`点字段名只改高亮的那个框：点进要编辑的输入框即可切换（当前是「${TARGET_LABEL[chipTarget]}」）`"
+            >作用于 {{ TARGET_LABEL[chipTarget] }}</span>
             <template v-if="chipInfos.length">
               <button
                 v-for="c in chipInfos"
@@ -397,14 +390,13 @@ const filterEl = ref(null);
   gap: 6px;
 }
 
-/* 作用框切换（过滤/排序/筛选）：比顶部 find/aggregate 那排更小，和字段标签同高 */
-.chip-target {
+/* 作用框提示：不再摆一排可点的 tab，跟着输入框焦点自动切换 */
+.proj-bar-target {
   flex: 0 0 auto;
-}
-
-.chip-target .mongo-mode-btn {
-  padding: 1px 8px;
+  margin-right: 2px;
+  color: var(--text-dim);
   font-size: 11px;
+  letter-spacing: .5px;
 }
 
 /* 字段标签：青色=已启用，虚线灰=未启用；点一下切换，不用手写 JSON */
@@ -513,5 +505,16 @@ const filterEl = ref(null);
 .mongo-field textarea:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .25);
+}
+
+/* 点字段名会作用到的那个框：焦点离开后（去点字段标签）也保持高亮，
+   免得不知道点一下到底改的是哪个输入框 */
+.mongo-field.field-active .mongo-field-label {
+  color: var(--cyan);
+}
+
+.mongo-field.field-active textarea {
+  border-color: rgba(var(--cyan-rgb), .55);
+  box-shadow: 0 0 0 1px rgba(var(--cyan-rgb), .18);
 }
 </style>
