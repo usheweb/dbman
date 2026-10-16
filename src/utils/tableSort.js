@@ -6,7 +6,7 @@ export const TABLE_SORT_FIELDS = [
   { field: 'tableName', label: '表名', type: 'string', text: t => t.tableName || '' },
   { field: 'createTime', label: '创建时间', type: 'string', text: t => t.createTime || '' },
   { field: 'updateTime', label: '更新时间', type: 'string', text: t => t.updateTime || '' },
-  { field: 'tableRows', label: '数据行数', type: 'number', text: t => fmtRows(t.tableRows) },
+  { field: 'tableRows', label: '数据行数', type: 'number', text: t => approxRows(t.tableRows) },
   { field: 'dataLength', label: '数据大小', type: 'number', text: t => formatBytes(t.dataLength) },
   { field: 'indexLength', label: '索引大小', type: 'number', text: t => formatBytes(t.indexLength) },
   { field: 'totalLength', label: '总大小', type: 'number', text: t => formatBytes(t.totalLength) },
@@ -26,6 +26,13 @@ TABLE_SORT_FIELDS.forEach(f => { FIELD_MAP[f.field] = f; });
 function fmtRows(v) {
   if (v === null || v === undefined) return '';
   return formatRows(v) + ' 行';
+}
+
+// 数据行数取的是 information_schema.TABLES 的统计值（InnoDB 是采样估算，小表常明显不准），
+// 只作量级参考，所以统一加「约」；自增值是精确值，仍走 fmtRows 不加「约」
+function approxRows(v) {
+  const t = fmtRows(v);
+  return t ? '约 ' + t : '';
 }
 
 export function fieldLabel(field) {
@@ -96,10 +103,9 @@ export function metaText(table, keys, max = 3) {
   return parts.join(' · ');
 }
 
-// 默认元信息：用户没额外指定排序维度时，表项下方固定展示「数据行数 · 总大小」。
-// 注意 TABLE_ROWS 对 InnoDB 是估算值，仅作量级参考。
+// 默认元信息：用户没额外指定排序维度时，表项下方固定展示「约 N 行 · 总大小」
 export function defaultMetaText(table) {
-  const rows = fmtRows(table.tableRows);
+  const rows = approxRows(table.tableRows);
   const size = formatBytes(table.totalLength);
   return [rows, size].filter(Boolean).join(' · ');
 }

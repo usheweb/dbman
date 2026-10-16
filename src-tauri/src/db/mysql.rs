@@ -75,20 +75,9 @@ impl RelationalDriver for MysqlDriver {
     }
 
     async fn tables(&self, database: &str, filter: Option<&str>) -> Result<Vec<TableInfo>, String> {
-        self.tables_page(database, filter, None).await
-    }
-
-    /// 首屏用：只取前 limit 张表。还是同一条 information_schema 查询、只多一个 LIMIT，
-    /// 且跳过逐表精确 COUNT，几百张表的库也能毫秒级返回。
-    async fn tables_page(
-        &self,
-        database: &str,
-        filter: Option<&str>,
-        limit: Option<u32>,
-    ) -> Result<Vec<TableInfo>, String> {
         let mut conn = self.conn.lock().await;
         use_database(&mut conn, database).await?;
-        fetch_tables(&mut conn, database, filter, limit).await
+        fetch_tables(&mut conn, database, filter).await
     }
 
     async fn columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>, String> {
@@ -489,14 +478,13 @@ fn row_to_json(row: &Row) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// 查询某库的表（名 + 注释 + 排序维度元数据）。filter 非空时按表名/注释模糊匹配；
-/// limit 非空时只取前 N 张（首屏快速渲染用，跳过精确行数补算）。
-/// 列全部来自 information_schema.TABLES，MySQL 5.6 及更早版本同样具备这些列。
+/// 查询某库的表（名 + 注释 + 排序维度元数据）。filter 非空时按表名/注释模糊匹配。
+/// 全部字段来自 information_schema.TABLES 的**一条** SQL（MySQL 5.6 及更早版本同样具备这些列），
+/// 行数/大小直接取服务端统计值，不再逐表补 SELECT COUNT(*)——几百张表的库也只发一次查询。
 async fn fetch_tables(
     conn: &mut Conn,
     database: &str,
     filter: Option<&str>,
-    limit: Option<u32>,
 ) -> Result<Vec<TableInfo>, String> {
     let mut sql = String::from(
         "SELECT TABLE_NAME as tableName, TABLE_COMMENT as tableComment, \
@@ -512,12 +500,8 @@ async fn fetch_tables(
         params.push(Value::Bytes(like.clone().into_bytes()));
         params.push(Value::Bytes(like.into_bytes()));
     }
-    // 固定按表名排序：分两次请求（先一小批、再全量）时顺序一致，列表不会因顺序变化闪动
+    // 固定按表名排序，前端本地再按用户选的维度排，多次刷新顺序一致、列表不闪动
     sql.push_str(" ORDER BY TABLE_NAME");
-    if let Some(n) = limit {
-        sql.push_str(" LIMIT ?");
-        params.push(Value::UInt(n as u64));
-    }
 
     let mut result = conn
         .exec_iter(sql, Params::Positional(params))
@@ -549,45 +533,9 @@ async fn fetch_tables(
     }
     result.drop_result().await.map_err(|e| e.to_string())?;
 
-    // InnoDB 的 TABLE_ROWS 是采样估计值，小表经常明显不准（甚至 0 行而实际有数据）。
-    // 对「估计行数少且体积小」的普通表补一次精确 COUNT(*)；大表继续用估计值（全表计数代价高）。
-    // 代价：COUNT(*) 是逐表串行执行的，库里这类小表一多（几百张）光这一轮就要好几秒，
-    // 所以候选超过阈值就整体跳过、直接用估算值；首屏那次请求（带 limit）也一律不补算。
-    const MAX_EXACT_COUNT_TABLES: usize = 50;
-    if limit.is_some() {
-        return Ok(out);
-    }
-    let candidates: Vec<String> = out
-        .iter()
-        .filter(|t| {
-            t.table_type.as_deref() == Some("BASE TABLE")
-                && t.table_rows.unwrap_or(0) < 100
-                && t.data_length.unwrap_or(0) < 8 * 1024 * 1024
-        })
-        .map(|t| t.table_name.clone())
-        .collect();
-    if candidates.len() > MAX_EXACT_COUNT_TABLES {
-        return Ok(out);
-    }
-    for name in candidates {
-        let count_sql = format!(
-            "SELECT COUNT(*) FROM {}.{}",
-            quote_ident(database),
-            quote_ident(&name)
-        );
-        if let Ok(Some(row)) = conn
-            .exec_first(count_sql, Params::Empty)
-            .await
-            .map_err(|e| e.to_string())
-        {
-            let row: Row = row;
-            if let Some(exact) = opt_u64(&row, 0) {
-                if let Some(t) = out.iter_mut().find(|t| t.table_name == name) {
-                    t.table_rows = Some(exact);
-                }
-            }
-        }
-    }
+    // 行数直接用 information_schema.TABLES 的 TABLE_ROWS（InnoDB 是采样估算值，只看量级够用）。
+    // 以前会对小表逐表补 SELECT COUNT(*)，几百张小表串行跑一轮就要好几秒，已整体去掉；
+    // 前端展示时统一写成「约 N 行」表明是估算值。
     Ok(out)
 }
 

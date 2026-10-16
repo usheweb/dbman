@@ -409,21 +409,21 @@ export const useConnectionStore = defineStore('connection', () => {
     return selectDatabaseFor(activeId.value, db);
   }
 
-  // 表列表两阶段加载：表多（几百张）时干等全量元数据太久，先用一小批把列表渲染出来，
-  // 再拉全量覆盖。递增序号防竞态：期间又切了库的话，旧请求的结果不再写回
-  const TABLE_PREVIEW_LIMIT = 20;
+  // 表列表一次拉全量：表信息全部来自 information_schema.TABLES 的一条 SQL。
+  // 以前会先拉 20 张预览再拉全量，但预览那条同样要扫一遍 information_schema，等于白多一次往返。
+  // 递增序号防竞态：期间又切了库的话，旧请求的结果不再写回
   const tableLoadSeq = {};
 
   async function loadTablesFor(connId, db) {
     const s = sessions.value[connId];
     if (!s) return;
     const seq = (tableLoadSeq[connId] = (tableLoadSeq[connId] || 0) + 1);
-    const preview = await withRetryFor(s, id => api.dbTables(id, db, null, TABLE_PREVIEW_LIMIT));
-    if (tableLoadSeq[connId] !== seq) return;
-    s.allTables = preview;
+    // 清掉上一个库的残留：全量拉取期间列表先空着、顶部显示「表列表加载中…」，
+    // 否则旧库的表会一直挂在列表里，用户可能在加载期间点到别的库的表
+    s.allTables = [];
     s.tablesLoading = true;
     try {
-      const all = await withRetryFor(s, id => api.dbTables(id, db, null, null));
+      const all = await withRetryFor(s, id => api.dbTables(id, db, null));
       if (tableLoadSeq[connId] !== seq) return;
       s.allTables = all;
     } finally {
