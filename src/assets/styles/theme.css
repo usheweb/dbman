@@ -1872,6 +1872,9 @@
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
             white-space: normal;
+            /* 中英混排时（如「平台 ios/android/web」）浏览器只在文字之间找断点，
+               英文整词会被挤到第二行，首行右侧留一大片空白；允许任意字符断行把首行填满 */
+            word-break: break-all;
             overflow: hidden;
             cursor: help;
         }
