@@ -35,7 +35,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
           v-tip="'刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）'"
           @click="ws.refreshResult()"
         >
-          <svg :class="{ 'icon-spin': ws.busy }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg :class="{ 'icon-spin': ws.refreshing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-2.6-6.4" />
             <path d="M21 3.5V9h-5.5" />
           </svg>

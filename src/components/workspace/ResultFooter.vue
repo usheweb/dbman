@@ -1,6 +1,6 @@
 <script setup>
 // 结果区底部状态栏：分页 + 每页显示 + 执行状态 + 数据导出
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useUiStore } from '@/stores/ui';
 import { escapeHtml } from '@/utils/escape';
@@ -8,8 +8,27 @@ import { escapeHtml } from '@/utils/escape';
 const ws = useWorkspaceStore();
 const ui = useUiStore();
 
+// 执行中计时：慢查询 / 被元数据锁挡住时，秒数在走才能说明「还在跑」而不是「卡死了」，
+// 否则用户只能盯着一个空白结果面板 + 转圈的图标猜
+const busyMs = ref(0);
+let busyTimer = null;
+let busyStarted = 0;
+watch(() => ws.busy, v => {
+  clearInterval(busyTimer);
+  busyTimer = null;
+  busyMs.value = 0;
+  if (!v) return;
+  busyStarted = Date.now();
+  busyTimer = setInterval(() => { busyMs.value = Date.now() - busyStarted; }, 100);
+});
+onUnmounted(() => clearInterval(busyTimer));
+
 const statusHtml = computed(() => {
   const p = ws.pageInfo;
+  // 执行中：先给运行态，替代「执行成功/失败」的既有文案
+  if (ws.busy) {
+    return `<span class="hint">正在执行… 已用 <b>${(busyMs.value / 1000).toFixed(1)}</b> 秒</span>`;
+  }
   // 还没执行过查询：不谎报「执行成功」
   if (p.idle) return '';
   if (p.error) {

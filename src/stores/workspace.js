@@ -560,6 +560,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 弹出二次确认框，返回 Promise<boolean>
   function askExecConfirm(kinds, sql) {
     return new Promise(resolve => {
+      // 兜底：弹窗还没关就又发起一次确认时，先把上一次的 await 以「未确认」结束，
+      // 否则它的 resolver 被覆盖后就永远挂住，loading/busy 也不会复位（按钮一直转圈）
+      if (execConfirmResolver) execConfirmResolver(false);
       execConfirmResolver = resolve;
       execConfirm.value = { visible: true, kinds, sql };
     });
@@ -632,13 +635,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  function executeQuery(confirmed) {
-    return runSql(getSql(), confirmed);
+  // 写语句执行完补一条明确反馈：结果区虽然在 pageInfo.write 时会显示「执行成功，影响 N 行」，
+  // 但用户容易只盯着结果表（那里对写语句本来就是空的），所以再弹一条 toast（读语句有表格，不弹）
+  function notifyWriteDone(ok) {
+    const p = pageInfo.value;
+    if (ok && p.write) ui.showToast(`已执行 · 影响 ${p.rows} 行 · ${p.elapsed}ms`, 'success');
+  }
+
+  async function executeQuery(confirmed) {
+    const ok = await runSql(getSql(), confirmed);
+    notifyWriteDone(ok);
+    return ok;
   }
 
   // 编辑器行内「执行这一行」：直接跑传入的文本，不覆盖编辑器里的完整脚本
-  function executeSqlText(sql) {
-    return runSql(sql);
+  async function executeSqlText(sql) {
+    const ok = await runSql(sql);
+    notifyWriteDone(ok);
+    return ok;
   }
 
   // 刷新按钮的最短可见时长：本地小表往往几十毫秒就返回，不兜底用户看不到任何反馈
@@ -1043,6 +1057,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // ===== 通用确认弹窗 =====
   function askResultConfirm(payload) {
     return new Promise(resolve => {
+      // 同 askExecConfirm：旧弹窗未关就再次发起时，先把上一次的 await 按「取消」结束，避免永久挂住
+      if (resultConfirmResolver) resultConfirmResolver({ ok: false, checked: resultConfirm.value.checkboxValue });
       resultConfirmResolver = resolve;
       resultConfirm.value = {
         visible: true, title: '', desc: '', estimate: '', sql: '',
@@ -1063,6 +1079,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // ===== 表名 / 字段名纠错弹窗 =====
   function askIdentSuggest(payload) {
     return new Promise(resolve => {
+      // 同 askExecConfirm：旧弹窗未关就再次发起时，先把上一次的 await 按「不纠错」结束，避免永久挂住
+      if (identSuggestResolver) identSuggestResolver(null);
       identSuggestResolver = resolve;
       identSuggest.value = { visible: true, kind: 'table', name: '', db: null, candidates: [], ...payload };
     });

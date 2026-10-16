@@ -102,38 +102,59 @@ impl RelationalDriver for MysqlDriver {
             .await
             .map_err(|e| e.to_string())?;
 
-        if result.is_empty() {
-            let affected = result.affected_rows();
-            result.drop_result().await.map_err(|e| e.to_string())?;
+        // 一次提交可能含多条语句（客户端默认开了 CLIENT_MULTI_STATEMENTS），服务器会返回多个结果集。
+        // 所以不能再用 is_empty() 判断读写：OK 包（写语句的结果）本来就是无列的，
+        // 而多条语句时 is_empty() 又是 false（因为还有后续结果集），
+        // 于是「3 条 ALTER 一起执行」会被误判成查询，既拿不到影响行数、又会把夹在
+        // 结果集序列里的错误静默丢掉。这里改为逐个结果集消费：
+        //   有列的段 → 按行读取（第一段作为查询结果返回，其余读掉）
+        //   无列的段 → OK 包，累加 affected_rows()
+        // affected_rows() 取的是「最近读完的那个 OK 包」，所以必须在消费该段之前取。
+        let mut first_rows: Option<(Vec<FieldInfo>, Vec<serde_json::Value>)> = None;
+        let mut affected: u64 = 0;
+        // columns() 返回 None 表示已经没有待处理结果集（columns_ref() 同样为空但无法区分
+        // 「没有结果集」和「结果是 OK 包」，所以这里用 columns()）
+        while let Some(cols) = result.columns() {
+            if cols.is_empty() {
+                affected += result.affected_rows();
+                // 空列段调一次 next() 即消费完当前段并前进到下一段
+                let _ = result.next().await.map_err(|e| e.to_string())?;
+                continue;
+            }
+            let fields: Vec<FieldInfo> = cols
+                .iter()
+                .map(|c| FieldInfo {
+                    name: c.name_str().into_owned(),
+                })
+                .collect();
+            let mut rows = Vec::new();
+            while let Some(row) = result.next().await.map_err(|e| e.to_string())? {
+                rows.push(row_to_json(&row));
+            }
+            if first_rows.is_none() {
+                first_rows = Some((fields, rows));
+            }
+        }
+        // 收尾：多结果集里夹带的错误会被驱动挂在 pending 上（此时 columns() 已是 None），
+        // 必须再 next() 一次把它抛出来，否则会「报错了却显示执行成功」
+        let _ = result.next().await.map_err(|e| e.to_string())?;
+
+        if let Some((fields, rows)) = first_rows {
             return Ok(QueryResponse {
-                write: true,
-                rows: Vec::new(),
-                fields: Vec::new(),
-                affected,
-                paged: false,
+                write: false,
+                rows,
+                fields,
+                affected: 0,
+                paged,
             });
         }
 
-        let fields: Vec<FieldInfo> = result
-            .columns_ref()
-            .iter()
-            .map(|c| FieldInfo {
-                name: c.name_str().into_owned(),
-            })
-            .collect();
-
-        let mut rows = Vec::new();
-        while let Some(row) = result.next().await.map_err(|e| e.to_string())? {
-            rows.push(row_to_json(&row));
-        }
-        result.drop_result().await.map_err(|e| e.to_string())?;
-
         Ok(QueryResponse {
-            write: false,
-            rows,
-            fields,
-            affected: 0,
-            paged,
+            write: true,
+            rows: Vec::new(),
+            fields: Vec::new(),
+            affected,
+            paged: false,
         })
     }
 
