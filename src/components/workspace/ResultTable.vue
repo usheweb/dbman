@@ -138,27 +138,31 @@ function onClickHeader(e, col, c) {
 const selRowCount = computed(() => selRows.value.length);
 const selColCount = computed(() => selCols.value.length);
 
-// ===== 表头排序箭头 =====
-// 点一下按该列升序，再点切降序，第三次清除排序。排序走的仍是「改写编辑器 SQL 的 ORDER BY
-// 再重跑」那一套（和右键「升序 / 降序排序」同一个入口），所以换一列点会直接替换掉原排序，
-// 不会叠成多列排序。箭头亮哪一列由 SQL 里的 ORDER BY 反推（ws.resultSort）
+// ===== 表头排序箭头（支持多列叠加） =====
+// 点一下把该列按升序「加入」排序，再点切降序，第三次把这一列移出排序；先点的列排在前面的
+// 顺位，也就是主排序键。排序走的仍是「改写编辑器 SQL 的 ORDER BY 再重跑」那一套，
+// 箭头亮哪几列、什么方向、第几顺位，都由 SQL 里的 ORDER BY 反推（ws.resultSort）
 function sortDirOf(col) {
-  const s = ws.resultSort;
-  return s && s.col === col ? s.dir : '';
+  const s = ws.resultSort.find(x => x.col === col);
+  return s ? s.dir : '';
+}
+
+// 该列在排序列表里的顺位（1 起，0 表示没参与排序）
+function sortRankOf(col) {
+  return ws.resultSort.findIndex(x => x.col === col) + 1;
 }
 
 function sortTipOf(col) {
   const dir = sortDirOf(col);
-  if (dir === 'ASC') return '当前按「' + col + '」升序，点击改为降序，再点一次清除排序';
-  if (dir === 'DESC') return '当前按「' + col + '」降序，点击清除排序';
-  return '点击按「' + col + '」升序排序（再点切降序、再点清除）';
+  const cur = ws.resultSort.map(s => s.col + (s.dir === 'ASC' ? ' 升序' : ' 降序'));
+  const head = cur.length ? '当前排序：' + cur.join('，') + '；' : '';
+  if (dir === 'ASC') return head + '点击「' + col + '」改为降序，再点一次移出排序';
+  if (dir === 'DESC') return head + '点击「' + col + '」移出排序';
+  return head + '点击按「' + col + '」升序加入排序（可多列叠加，先点的排前面）';
 }
 
 function onSortClick(col) {
-  const dir = sortDirOf(col);
-  if (dir === 'ASC') ws.sortResultBy(col, 'DESC');
-  else if (dir === 'DESC') ws.clearResultSort();
-  else ws.sortResultBy(col, 'ASC');
+  ws.toggleSort(col);
 }
 
 // ===== 拖动框选：按住左键划过单元格 / 行号列，按矩形范围选中 =====
@@ -360,8 +364,8 @@ function headerItems() {
   const hasSort = !!(parsed && parsed.order);
   const hasWhere = !!(parsed && parsed.where);
   const items = [
-    { label: '升序排序', value: 'sort-asc' },
-    { label: '降序排序', value: 'sort-desc' },
+    { label: '仅按此列升序', value: 'sort-asc' },
+    { label: '仅按此列降序', value: 'sort-desc' },
     { label: '筛选…', value: 'filter' }
   ];
   if (hasSort || hasWhere) items.push({ separator: true });
@@ -510,7 +514,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             :key="col"
             :data-col="col"
             :style="colStyle(col)"
-            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；点列名后的箭头快速排序；右键：排序 / 筛选；右边缘可拖动调整列宽'"
+            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；点列名后的箭头叠加排序，可多列；右键：排序 / 筛选；右边缘可拖动调整列宽'"
             @click="onClickHeader($event, col, c)"
             @contextmenu.prevent="showHeaderMenu($event, col)"
           >
@@ -521,7 +525,11 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
               @click.stop="onSortClick(col)"
               @mousedown.stop
               @dblclick.stop
-            ><span class="sort-glyph up">▲</span><span class="sort-glyph down">▼</span></span>
+            ><span class="sort-fold"
+            ><span class="sort-glyph up">▲</span><span class="sort-glyph down">▼</span></span><span
+              v-if="sortRankOf(col) && ws.resultSort.length > 1"
+              class="sort-rank"
+            >{{ sortRankOf(col) }}</span></span>
             <div v-if="colComments[col]" class="col-sub">
               <div
                 class="column-comment"

@@ -65,9 +65,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 优先于错误 / 成功提示 / 数据表分支
   const stmtResults = ref(null);
 
-  // 结果表头排序箭头的回显状态（{ col, dir }，dir 为空表示没排序）。
-  // 不是独立状态，而是从编辑器 SQL 的 ORDER BY 反推出来的，见 syncResultSort
-  const resultSort = ref({ col: '', dir: '' });
+  // 结果表头排序箭头的回显状态：排序列表 [{ col, dir }]，空数组表示没排序。
+  // 不是独立状态，而是从编辑器 SQL 的 ORDER BY 反推出来的，见 syncResultSort。
+  // 数组顺序就是排序优先级的顺序（第一个是主排序键），支持多列叠加
+  const resultSort = ref([]);
 
   const findState = ref({ keyword: '', only: true, index: -1 });
   const matchCells = ref([]); // [{ r, c }]，当前页命中的单元格
@@ -872,20 +873,77 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return rebuildSql(parsed);
   }
 
-  // 表头排序箭头的回显：从编辑器 SQL 的 ORDER BY 反推当前排的是哪一列、什么方向。
-  // 只认「单列 asc/desc」这一种形态（右键排序和箭头点出来的都是它）；
-  // 多列 / 表达式排序认不出来就不亮箭头，此时点箭头仍按该列重排（等于替换掉原 ORDER BY）
+  // 表头排序箭头的回显：从编辑器 SQL 的 ORDER BY 反推当前排了哪几列、方向与先后。
+  // 只认「单列 asc/desc」形态的排序项（右键排序和箭头点出来的都是它）；
+  // 表达式 / 带 COLLATE 之类的排序项认不出来就不进列表（箭头不亮），
+  // 但点箭头会按「认出来的项 + 新点的那一列」重建 ORDER BY，等于把认不出的项替换掉
   function syncResultSort() {
     const parsed = splitTopLevelClauses(getSql());
-    const m = parsed && parsed.order ? /^\s*`?([^`\s,]+)`?\s+(asc|desc)\s*$/i.exec(parsed.order) : null;
-    const next = m ? { col: m[1].replace(/``/g, '`'), dir: m[2].toUpperCase() } : { col: '', dir: '' };
-    if (next.col !== resultSort.value.col || next.dir !== resultSort.value.dir) resultSort.value = next;
+    const list = parsed && parsed.order
+      ? splitOrderTerms(parsed.order).map(parseSortTerm).filter(Boolean)
+      : [];
+    const same = list.length === resultSort.value.length
+      && list.every((s, i) => s.col === resultSort.value[i].col && s.dir === resultSort.value[i].dir);
+    if (!same) resultSort.value = list;
   }
 
-  function sortResultBy(col, dir) {
-    const sql = rewriteEditorSql({ hasOrder: true, order: `${sqlIdent(col)} ${dir}` });
-    if (!sql) return;
+  // ORDER BY 的内容按顶层逗号拆成一项项（括号里的逗号不算，如 ORDER BY COALESCE(a, b)）
+  function splitOrderTerms(order) {
+    const s = String(order || '');
+    const out = [];
+    let buf = '', depth = 0, quote = null;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (quote) {
+        buf += ch;
+        if (ch === '\\') { if (i + 1 < s.length) buf += s[++i]; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '`' || ch === "'" || ch === '"') { quote = ch; buf += ch; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      else if (ch === ',' && depth === 0) { out.push(buf); buf = ''; continue; }
+      buf += ch;
+    }
+    out.push(buf);
+    return out.map(x => x.trim()).filter(Boolean);
+  }
+
+  function parseSortTerm(term) {
+    const m = /^`?([^`\s,]+)`?\s+(asc|desc)\s*$/i.exec(term);
+    return m ? { col: m[1].replace(/``/g, '`'), dir: m[2].toUpperCase() } : null;
+  }
+
+  function sortSummary(list) {
+    return list.map(s => s.col + (s.dir === 'ASC' ? ' 升序' : ' 降序')).join('，');
+  }
+
+  // 用一份排序列表重建编辑器 SQL 的 ORDER BY 并重跑（空列表 = 整条 ORDER BY 去掉）
+  function applyResultSort(list) {
+    const order = list.length ? list.map(s => `${sqlIdent(s.col)} ${s.dir}`).join(', ') : null;
+    const sql = rewriteEditorSql({ hasOrder: true, order });
+    if (!sql) return false;
     setSqlAndRun(sql);
+    return true;
+  }
+
+  // 表头箭头：没排过的列 → 追加为下一顺位（升序）；已升序 → 改降序；再点 → 把这一列移出排序。
+  // 先点的列排在前面，也就是主排序键在前，多列叠加成一个多级排序
+  function toggleSort(col) {
+    const list = resultSort.value;
+    const i = list.findIndex(s => s.col === col);
+    let next;
+    if (i === -1) next = list.concat([{ col, dir: 'ASC' }]);
+    else if (list[i].dir === 'ASC') next = list.map(s => (s.col === col ? { col, dir: 'DESC' } : s));
+    else next = list.filter(s => s.col !== col);
+    if (!applyResultSort(next)) return;
+    ui.showToast(next.length ? '排序：' + sortSummary(next) : '已清除排序', 'success');
+  }
+
+  // 右键菜单的「仅按此列升序 / 降序」：直接指定方向、覆盖掉原来的多列排序
+  function sortResultBy(col, dir) {
+    if (!applyResultSort([{ col, dir }])) return;
     ui.showToast(`已按「${col}」${dir === 'ASC' ? '升序' : '降序'}排序`, 'success');
   }
 
@@ -1651,7 +1709,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     executeQuery, executeSqlText, refreshResult, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
-    resultSort, syncResultSort,
+    resultSort, syncResultSort, toggleSort,
     openFilterDialog, closeFilterDialog, applyFilter,
     applyFind, toggleFindOnly, clearFind, resetFindState,
     bindSqlStore, addSqlLog,
