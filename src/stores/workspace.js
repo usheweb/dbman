@@ -65,6 +65,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 优先于错误 / 成功提示 / 数据表分支
   const stmtResults = ref(null);
 
+  // 结果表头排序箭头的回显状态（{ col, dir }，dir 为空表示没排序）。
+  // 不是独立状态，而是从编辑器 SQL 的 ORDER BY 反推出来的，见 syncResultSort
+  const resultSort = ref({ col: '', dir: '' });
+
   const findState = ref({ keyword: '', only: true, index: -1 });
   const matchCells = ref([]); // [{ r, c }]，当前页命中的单元格
 
@@ -209,6 +213,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function setSql(sql) {
     draftSql.value = sql;
     if (editor.value) editor.value.setValue(sql);
+    syncResultSort();
   }
 
   // 编辑器（重新）挂载后，把当前连接的草稿灌进去
@@ -865,6 +870,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (hasWhere) parsed.where = where;
     if (hasOrder) parsed.order = order;
     return rebuildSql(parsed);
+  }
+
+  // 表头排序箭头的回显：从编辑器 SQL 的 ORDER BY 反推当前排的是哪一列、什么方向。
+  // 只认「单列 asc/desc」这一种形态（右键排序和箭头点出来的都是它）；
+  // 多列 / 表达式排序认不出来就不亮箭头，此时点箭头仍按该列重排（等于替换掉原 ORDER BY）
+  function syncResultSort() {
+    const parsed = splitTopLevelClauses(getSql());
+    const m = parsed && parsed.order ? /^\s*`?([^`\s,]+)`?\s+(asc|desc)\s*$/i.exec(parsed.order) : null;
+    const next = m ? { col: m[1].replace(/``/g, '`'), dir: m[2].toUpperCase() } : { col: '', dir: '' };
+    if (next.col !== resultSort.value.col || next.dir !== resultSort.value.dir) resultSort.value = next;
   }
 
   function sortResultBy(col, dir) {
@@ -1636,6 +1651,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     executeQuery, executeSqlText, refreshResult, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
+    resultSort, syncResultSort,
     openFilterDialog, closeFilterDialog, applyFilter,
     applyFind, toggleFindOnly, clearFind, resetFindState,
     bindSqlStore, addSqlLog,

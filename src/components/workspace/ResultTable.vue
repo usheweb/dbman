@@ -138,6 +138,29 @@ function onClickHeader(e, col, c) {
 const selRowCount = computed(() => selRows.value.length);
 const selColCount = computed(() => selCols.value.length);
 
+// ===== 表头排序箭头 =====
+// 点一下按该列升序，再点切降序，第三次清除排序。排序走的仍是「改写编辑器 SQL 的 ORDER BY
+// 再重跑」那一套（和右键「升序 / 降序排序」同一个入口），所以换一列点会直接替换掉原排序，
+// 不会叠成多列排序。箭头亮哪一列由 SQL 里的 ORDER BY 反推（ws.resultSort）
+function sortDirOf(col) {
+  const s = ws.resultSort;
+  return s && s.col === col ? s.dir : '';
+}
+
+function sortTipOf(col) {
+  const dir = sortDirOf(col);
+  if (dir === 'ASC') return '当前按「' + col + '」升序，点击改为降序，再点一次清除排序';
+  if (dir === 'DESC') return '当前按「' + col + '」降序，点击清除排序';
+  return '点击按「' + col + '」升序排序（再点切降序、再点清除）';
+}
+
+function onSortClick(col) {
+  const dir = sortDirOf(col);
+  if (dir === 'ASC') ws.sortResultBy(col, 'DESC');
+  else if (dir === 'DESC') ws.clearResultSort();
+  else ws.sortResultBy(col, 'ASC');
+}
+
 // ===== 拖动框选：按住左键划过单元格 / 行号列，按矩形范围选中 =====
 const dragging = ref(false);
 const dragKind = ref('');      // 'cell' | 'row'
@@ -487,11 +510,18 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             :key="col"
             :data-col="col"
             :style="colStyle(col)"
-            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；右键：排序 / 筛选；右边缘可拖动调整列宽'"
+            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；点列名后的箭头快速排序；右键：排序 / 筛选；右边缘可拖动调整列宽'"
             @click="onClickHeader($event, col, c)"
             @contextmenu.prevent="showHeaderMenu($event, col)"
           >
-            {{ col }}
+            {{ col }}<span
+              class="col-sort"
+              :class="'sort-' + (sortDirOf(col) || 'none').toLowerCase()"
+              v-tip="sortTipOf(col)"
+              @click.stop="onSortClick(col)"
+              @mousedown.stop
+              @dblclick.stop
+            ><span class="sort-glyph up">▲</span><span class="sort-glyph down">▼</span></span>
             <div v-if="colComments[col]" class="col-sub">
               <div
                 class="column-comment"

@@ -1786,6 +1786,40 @@
         .col-resizer.active::after {
             background: var(--cyan);
         }
+        /* 表头快速排序箭头：列名后常驻的一对上下小三角，平时压暗只作提示，
+           悬停变亮，当前排到的那一列把对应方向的三角点亮成主题青色 */
+        .col-sort {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 1px;
+            margin-left: 3px;
+            padding: 2px 3px;
+            border-radius: 3px;
+            cursor: pointer;
+            vertical-align: middle;
+            opacity: .35;
+            transition: opacity .15s, background .15s;
+        }
+        .col-sort:hover {
+            opacity: 1;
+            background: var(--hover-bg);
+        }
+        .col-sort.sort-asc,
+        .col-sort.sort-desc {
+            opacity: 1;
+        }
+        .col-sort .sort-glyph {
+            font-size: 6px;
+            line-height: 6px;
+            color: var(--text-dim);
+        }
+        .col-sort:hover .sort-glyph {
+            color: var(--text);
+        }
+        .col-sort.sort-asc .sort-glyph.up,
+        .col-sort.sort-desc .sort-glyph.down {
+            color: var(--cyan);
+        }
         .data-table td {
             background: rgba(var(--ink-rgb), .45);
             cursor: pointer;
