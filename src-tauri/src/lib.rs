@@ -207,6 +207,7 @@ pub fn run() {
             db::db_table_structure,
             db::db_export_data_sql,
             db::db_exec_script,
+            db::db_split_statements,
             csv_import::csv_preview,
             csv_import::db_import_csv,
             redis_cmd::redis_info,

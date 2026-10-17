@@ -20,7 +20,7 @@ use super::util::{
 use super::RelationalDriver;
 use crate::models::{
     ColumnDef, ColumnInfo, DbConfig, ExportColumn, FieldInfo, ForeignKeyDef, IndexDef,
-    QueryResponse, TableInfo, TableOptionDef, TableStructure,
+    QueryResponse, StatementResult, TableInfo, TableOptionDef, TableStructure,
 };
 
 pub struct PostgresDriver {
@@ -467,7 +467,7 @@ impl RelationalDriver for PostgresDriver {
         Ok(count)
     }
 
-    async fn exec_script(&self, database: &str, sql: &str) -> Result<u64, String> {
+    async fn exec_script(&self, database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let client = self.client.lock().await;
         if !database.is_empty() {
             set_schema(&client, database).await?;
@@ -476,15 +476,35 @@ impl RelationalDriver for PostgresDriver {
         if statements.is_empty() {
             return Err("没有可执行的语句".to_string());
         }
-        let mut count = 0u64;
-        for (idx, stmt) in statements.iter().enumerate() {
-            client
-                .simple_query(stmt)
-                .await
-                .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-            count += 1;
+        // 按条执行并记录每条结果：失败即停，剩余语句标记 skipped
+        let mut out: Vec<StatementResult> = Vec::with_capacity(statements.len());
+        let mut stopped = false;
+        for stmt in statements {
+            if stopped {
+                out.push(StatementResult::skipped(stmt));
+                continue;
+            }
+            let started = std::time::Instant::now();
+            let res = match client.simple_query(stmt.as_str()).await {
+                Ok(msgs) => {
+                    let r = collect(msgs);
+                    Ok((r.rows.len() as u64, r.affected))
+                }
+                Err(e) => Err(e.to_string()),
+            };
+            match res {
+                Ok((rows, affected)) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::success(stmt, rows, affected, ms));
+                }
+                Err(e) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::error(stmt, e, ms));
+                    stopped = true;
+                }
+            }
         }
-        Ok(count)
+        Ok(out)
     }
 
     async fn distinct_values(

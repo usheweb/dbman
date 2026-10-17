@@ -98,6 +98,58 @@ pub struct QueryResponse {
     pub paged: bool,
 }
 
+/// 多语句脚本中单条语句的执行结果（结果区逐条反馈列表的数据源）。
+#[derive(Debug, Serialize)]
+pub struct StatementResult {
+    /// 该条语句原文：前端做单行摘要展示 + 悬浮提示全文
+    pub sql: String,
+    /// "success" | "error" | "skipped"（失败即停后剩余条目标记 skipped）
+    pub status: String,
+    /// SELECT 返回的行数；写语句为 0
+    pub rows: u64,
+    /// 影响行数（DDL 的 OK 包恒为 0，前端照实展示）
+    pub affected: u64,
+    /// 该条耗时（毫秒）；skipped 为 0
+    pub elapsed_ms: u64,
+    /// status = "error" 时的错误文案；其余为空串
+    pub error: String,
+}
+
+impl StatementResult {
+    pub fn success(sql: String, rows: u64, affected: u64, elapsed_ms: u64) -> Self {
+        Self {
+            sql,
+            status: "success".to_string(),
+            rows,
+            affected,
+            elapsed_ms,
+            error: String::new(),
+        }
+    }
+
+    pub fn error(sql: String, error: String, elapsed_ms: u64) -> Self {
+        Self {
+            sql,
+            status: "error".to_string(),
+            rows: 0,
+            affected: 0,
+            elapsed_ms,
+            error,
+        }
+    }
+
+    pub fn skipped(sql: String) -> Self {
+        Self {
+            sql,
+            status: "skipped".to_string(),
+            rows: 0,
+            affected: 0,
+            elapsed_ms: 0,
+            error: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExportColumn {
     #[serde(default)]

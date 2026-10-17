@@ -24,7 +24,7 @@ use super::util::{
 use super::RelationalDriver;
 use crate::models::{
     ColumnDef, ColumnInfo, DbConfig, ExportColumn, FieldInfo, ForeignKeyDef, IndexDef,
-    QueryResponse, TableInfo, TableOptionDef, TableStructure,
+    QueryResponse, StatementResult, TableInfo, TableOptionDef, TableStructure,
 };
 
 /// tiberius 客户端：TDS over 兼容包装的 TCP 流。
@@ -533,7 +533,7 @@ impl RelationalDriver for SqlServerDriver {
         Ok(count)
     }
 
-    async fn exec_script(&self, database: &str, sql: &str) -> Result<u64, String> {
+    async fn exec_script(&self, database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let mut client = self.client.lock().await;
         if !database.is_empty() {
             use_database(&mut client, database).await?;
@@ -542,20 +542,37 @@ impl RelationalDriver for SqlServerDriver {
         if statements.is_empty() {
             return Err("没有可执行的语句".to_string());
         }
-        let mut count = 0u64;
-        for (idx, stmt) in statements.iter().enumerate() {
-            // 脚本语句类型混杂（DDL / DML / USE），统一走文本协议并排空结果。
-            let stream = client
-                .simple_query(stmt.as_str())
-                .await
-                .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-            stream
-                .into_results()
-                .await
-                .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-            count += 1;
+        // 按条执行：脚本语句类型混杂（DDL / DML / USE），统一走文本协议并排空结果；
+        // 文本协议下拿不到影响行数，只区分成功与失败。失败即停，剩余语句标记 skipped。
+        let mut out: Vec<StatementResult> = Vec::with_capacity(statements.len());
+        let mut stopped = false;
+        for stmt in statements {
+            if stopped {
+                out.push(StatementResult::skipped(stmt));
+                continue;
+            }
+            let started = std::time::Instant::now();
+            let res = match client.simple_query(stmt.as_str()).await {
+                Ok(stream) => stream
+                    .into_results()
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| e.to_string()),
+                Err(e) => Err(e.to_string()),
+            };
+            match res {
+                Ok(()) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::success(stmt, 0, 0, ms));
+                }
+                Err(e) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::error(stmt, e, ms));
+                    stopped = true;
+                }
+            }
         }
-        Ok(count)
+        Ok(out)
     }
 
     async fn distinct_values(

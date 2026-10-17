@@ -22,7 +22,7 @@ use super::util::{
 use super::RelationalDriver;
 use crate::models::{
     ColumnDef, ColumnInfo, DbConfig, ExportColumn, FieldInfo, ForeignKeyDef, IndexDef,
-    QueryResponse, TableInfo, TableOptionDef, TableStructure,
+    QueryResponse, StatementResult, TableInfo, TableOptionDef, TableStructure,
 };
 
 pub struct OracleDriver {
@@ -760,7 +760,7 @@ impl RelationalDriver for OracleDriver {
         .await
     }
 
-    async fn exec_script(&self, database: &str, sql: &str) -> Result<u64, String> {
+    async fn exec_script(&self, database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let database = database.to_string();
         let sql = sql.to_string();
         self.with_conn(move |conn| {
@@ -770,14 +770,30 @@ impl RelationalDriver for OracleDriver {
             if statements.is_empty() {
                 return Err("没有可执行的语句".to_string());
             }
-            let mut count = 0u64;
-            for (idx, stmt) in statements.iter().enumerate() {
-                conn.execute(stmt, &[])
-                    .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-                count += 1;
+            // 按条执行：oracle 的 execute 返回 Statement（影响行数不可直接取），
+            // 只区分成功与失败；失败即停，剩余语句标记 skipped
+            let mut out: Vec<StatementResult> = Vec::with_capacity(statements.len());
+            let mut stopped = false;
+            for stmt in statements {
+                if stopped {
+                    out.push(StatementResult::skipped(stmt));
+                    continue;
+                }
+                let started = std::time::Instant::now();
+                match conn.execute(&stmt, &[]) {
+                    Ok(_) => {
+                        let ms = started.elapsed().as_millis() as u64;
+                        out.push(StatementResult::success(stmt, 0, 0, ms));
+                    }
+                    Err(e) => {
+                        let ms = started.elapsed().as_millis() as u64;
+                        out.push(StatementResult::error(stmt, e.to_string(), ms));
+                        stopped = true;
+                    }
+                }
             }
             conn.commit().map_err(|e| e.to_string())?;
-            Ok(count)
+            Ok(out)
         })
         .await
     }

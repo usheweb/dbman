@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui';
 import { rawText } from '@/utils/format';
 import { splitTopLevelClauses } from '@/utils/sql';
 import ContextMenu from '@/components/common/ContextMenu.vue';
+import ResultStatements from './ResultStatements.vue';
 
 const ws = useWorkspaceStore();
 const ui = useUiStore();
@@ -406,7 +407,8 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
 
 <template>
   <div class="result-content" ref="rootEl">
-    <div v-if="ws.pageInfo.error" style="color:var(--magenta);font-family:var(--font-mono);">错误: {{ ws.pageInfo.error }}</div>
+    <ResultStatements v-if="ws.stmtResults" />
+    <div v-else-if="ws.pageInfo.error" style="color:var(--magenta);font-family:var(--font-mono);">错误: {{ ws.pageInfo.error }}</div>
     <div v-else-if="ws.pageInfo.write" style="color:var(--green);font-family:var(--font-mono);">执行成功，影响 {{ ws.pageInfo.rows }} 行</div>
     <div v-else-if="ws.pageInfo.idle"></div>
     <div v-else-if="ws.lastResult && !ws.lastResult.data.length && !columns.length" class="result-empty">

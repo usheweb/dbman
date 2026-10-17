@@ -54,9 +54,16 @@ export function dbExportDataSql(connId, database, table, path, withDrop, withCre
   return invoke('db_export_data_sql', { connId, database, table, path, withDrop, withCreate, batchSize });
 }
 
-// 执行（可手改的）DDL / SQL 脚本，支持多条语句
+// 执行（可手改的）DDL / SQL 脚本，支持多条语句。
+// 返回逐条执行结果数组：[{ sql, status: 'success'|'error'|'skipped', rows, affected, elapsed_ms, error }]
 export function dbExecScript(connId, database, sql) {
   return invoke('db_exec_script', { connId, database, sql });
+}
+
+// 按顶层分号切分 SQL 脚本（纯本地，不连数据库）：用于判断编辑器内容是否为多语句，
+// 以便决定走「结果表格」还是「逐条执行结果反馈列表」
+export function dbSplitStatements(sql) {
+  return invoke('db_split_statements', { sql });
 }
 
 // ===== Redis =====

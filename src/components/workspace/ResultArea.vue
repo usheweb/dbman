@@ -27,12 +27,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   <div class="result-area">
     <div class="result-header">
       <span>查询结果</span>
-      <span>{{ ws.lastResult ? ws.lastResult.data.length + ' 行' : '' }}</span>
+      <span>{{ ws.stmtResults ? ws.stmtResults.length + ' 条语句' : (ws.lastResult ? ws.lastResult.data.length + ' 行' : '') }}</span>
       <div class="result-tools">
         <button
           class="icon-btn"
-          :disabled="!ws.lastSql || ws.busy"
-          v-tip="'刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）'"
+          :disabled="!ws.lastSql || ws.busy || !!ws.stmtResults"
+          v-tip="ws.stmtResults ? '多语句执行结果不支持刷新' : '刷新当前查询结果（重新执行产生这张表的那条 SQL，与编辑器内容无关）'"
           @click="ws.refreshResult()"
         >
           <svg :class="{ 'icon-spin': ws.refreshing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

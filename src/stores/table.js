@@ -88,10 +88,14 @@ export const useTableStore = defineStore('table', () => {
   }
 
   // 直接执行 DDL 脚本（会抛错，供设计器自行处理错误展示）
+  // dbExecScript 现在按条返回结果，首条失败的错误文案即设计器要展示的错误
   async function execDdl(sql, affected, action) {
-    const count = await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase, sql));
+    const list = await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase, sql));
+    const failed = list.find(r => r.status === 'error');
+    if (failed) throw new Error(failed.error);
+    const rows = list.filter(r => r.status === 'success').length;
     await refreshAfterDdl(affected, action);
-    return count;
+    return rows;
   }
 
   // ===== 导出 =====

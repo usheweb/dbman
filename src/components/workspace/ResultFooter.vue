@@ -29,6 +29,16 @@ const statusHtml = computed(() => {
   if (ws.busy) {
     return `<span class="hint">正在执行… 已用 <b>${(busyMs.value / 1000).toFixed(1)}</b> 秒</span>`;
   }
+  // 多语句执行：结果区是逐条反馈列表，底部只给汇总
+  if (ws.stmtResults) {
+    const l = ws.stmtResults;
+    const ok = l.filter(r => r.status === 'success').length;
+    const fail = l.filter(r => r.status === 'error').length;
+    const skip = l.filter(r => r.status === 'skipped').length;
+    return `<span class="ok">共 ${l.length} 条：成功 ${ok}</span>`
+      + (fail ? ` · <span class="err">失败 ${fail}</span>` : '')
+      + (skip ? ` · <span class="hint">未执行 ${skip}</span>` : '');
+  }
   // 还没执行过查询：不谎报「执行成功」
   if (p.idle) return '';
   if (p.error) {
@@ -134,7 +144,7 @@ async function commitPage() {
     <button
       class="export-link"
       v-tip="'导出结果为 CSV（可选表头与范围）'"
-      :disabled="!ws.lastSql || ws.pageInfo.idle || ws.pageInfo.write"
+      :disabled="!ws.lastSql || ws.pageInfo.idle || ws.pageInfo.write || !!ws.stmtResults"
       @click="ui.openModal('exportModal')"
     >【数据导出】</button>
   </div>

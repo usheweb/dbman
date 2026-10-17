@@ -59,6 +59,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const pageNo = ref(1);
   const pageInfo = ref({ hasMore: false, paged: true, elapsed: 0, rows: 0, idle: true, write: false, error: '' });
 
+  // 多语句执行的逐条结果列表（phpMyAdmin 风格）：非空时结果区显示列表视图，
+  // 优先于错误 / 成功提示 / 数据表分支
+  const stmtResults = ref(null);
+
   const findState = ref({ keyword: '', only: true, index: -1 });
   const matchCells = ref([]); // [{ r, c }]，当前页命中的单元格
 
@@ -186,6 +190,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       };
     }
     lastResult.value = { data: entry.data, fields: entry.fields, colInfo: entry.colInfo };
+    stmtResults.value = null; // 历史条目是单结果集快照，切过去要收起多语句反馈列表
     lastSql.value = entry.sql;
     pageNo.value = entry.pageNo;
     pageInfo.value = { ...entry.pageInfo };
@@ -218,7 +223,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function blankTabState() {
     return {
-      lastSql: '', lastResult: null, columnModes: {},
+      lastSql: '', lastResult: null, stmtResults: null, columnModes: {},
       findState: { keyword: '', only: true, index: -1 }, matchCells: [],
       pageNo: 1, pageInfo: IDLE_PAGE(), pendingEdits: {},
       historyView: null, liveSnapshot: null, sql: ''
@@ -230,6 +235,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return {
       lastSql: lastSql.value,
       lastResult: lastResult.value,
+      stmtResults: stmtResults.value,
       columnModes: columnModes.value,
       findState: findState.value,
       matchCells: matchCells.value,
@@ -247,6 +253,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const t = s || blankTabState();
     lastSql.value = t.lastSql || '';
     lastResult.value = t.lastResult || null;
+    stmtResults.value = t.stmtResults || null;
     columnModes.value = t.columnModes || {};
     findState.value = t.findState || { keyword: '', only: true, index: -1 };
     matchCells.value = t.matchCells || [];
@@ -341,6 +348,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const snap = tabSnapshots[tabId] || (tabSnapshots[tabId] = blankTabState());
     snap.lastSql = lastSql.value;
     snap.lastResult = lastResult.value;
+    snap.stmtResults = stmtResults.value;
     snap.columnModes = columnModes.value;
     snap.findState = findState.value;
     snap.matchCells = matchCells.value;
@@ -538,6 +546,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function adoptRows(data, page, elapsed) {
     // 结果集换了内容：待保存的单元格修改与行/列选择都失效，一并清掉
     pendingEdits.value = {};
+    stmtResults.value = null; // 单语句执行成功：清掉上一次的多语句反馈列表
     if (data.write) {
       pageNo.value = page;
       pageInfo.value = { hasMore: false, paged: false, elapsed, rows: data.affected || 0, write: true, idle: false, error: '' };
@@ -591,6 +600,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (kinds.length && !(await askExecConfirm(kinds, sql))) return false;
       if (tabId !== liveTabId) return false; // 确认期间切走了 Tab，放弃这次执行
     }
+    // 脚本含多条语句时改走「逐条执行 + 反馈列表」（后端 split 能可靠处理注释/字符串里的分号）。
+    // 单条语句保持原路径：SELECT 走结果表格 + 分页，写语句走「执行成功，影响 N 行」。
+    // 先用「正文里还有没有分号」做零成本负向过滤，命中才调后端切分（避免每次查表都多一次 IPC）。
+    if (!isMongoConn()) {
+      const body = sql.replace(/;+\s*$/, '');
+      let count = 1;
+      if (body.includes(';')) {
+        try {
+          count = (await api.dbSplitStatements(body)).length;
+        } catch {
+          count = 1;
+        }
+      }
+      if (count > 1) return runMultiStatements(sql, tabId, db, connData);
+    }
     lastSql.value = sql;
     columnModes.value = {}; // 新一次查询：清空单列覆盖
     resetFindState();
@@ -629,6 +653,57 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       renderError(msg, tabId);
       addSqlLog(sql, { success: false, elapsed: Date.now() - started, error: msg }, connData, db);
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // 多语句脚本：逐条执行并把结果列表落到结果区（phpMyAdmin 风格的执行反馈）
+  async function runMultiStatements(sql, tabId, db, connData) {
+    lastSql.value = sql;
+    columnModes.value = {}; // 新一次执行：清空单列覆盖
+    resetFindState();
+    const started = Date.now();
+    loading.value = true;
+    try {
+      const list = await conn.withRetry(id => api.dbExecScript(id, db || '', sql));
+      const elapsed = Date.now() - started;
+      const failed = list.find(r => r.status === 'error');
+      const okCount = list.filter(r => r.status === 'success').length;
+      const info = { hasMore: false, paged: false, elapsed, rows: okCount, write: false, idle: false, error: '' };
+      if (tabId !== liveTabId) {
+        // 回包时已切走：结果落到原 Tab 快照，再把当前 Tab 的状态换回来
+        const snap = tabSnapshots[tabId] || (tabSnapshots[tabId] = blankTabState());
+        snap.lastSql = sql;
+        snap.stmtResults = list;
+        snap.lastResult = null;
+        snap.matchCells = [];
+        snap.pageNo = 1;
+        snap.pageInfo = info;
+        applyTabSnapshot(tabSnapshots[liveTabId], false);
+      } else {
+        stmtResults.value = list;
+        lastResult.value = null;
+        matchCells.value = [];
+        pageNo.value = 1;
+        historyView.value = null;
+        liveSnapshot = null;
+        pageInfo.value = info;
+      }
+      addSqlLog(sql, {
+        success: !failed, elapsed, rows: list.length,
+        error: failed ? failed.error : ''
+      }, connData, db);
+      if (failed) {
+        ui.showToast(`第 ${list.indexOf(failed) + 1} 条执行失败：${failed.error}`, 'error');
+      } else {
+        ui.showToast(`已执行 ${list.length} 条语句 · ${elapsed}ms`, 'success');
+      }
+      return !failed;
+    } catch (err) {
+      renderError(err.message, tabId);
+      addSqlLog(sql, { success: false, elapsed: Date.now() - started, error: err.message }, connData, db);
       return false;
     } finally {
       loading.value = false;
@@ -729,12 +804,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (tabId !== liveTabId) {
       const snap = tabSnapshots[tabId] || (tabSnapshots[tabId] = blankTabState());
       snap.lastResult = null;
+      snap.stmtResults = null;
       snap.matchCells = [];
       snap.pageNo = 1;
       snap.pageInfo = failed;
       applyTabSnapshot(tabSnapshots[liveTabId], false);
     } else {
       lastResult.value = null;
+      stmtResults.value = null;
       matchCells.value = [];
       pageNo.value = 1;
       pageInfo.value = failed;
@@ -1291,23 +1368,35 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (tabId !== liveTabId) return false; // 确认期间切走了 Tab
     }
     const started = Date.now();
+    let list = [];
     try {
-      await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase || '', sqlText));
-      addSqlLog(sqlText, { success: true, elapsed: Date.now() - started, rows: statements.length }, connData, db);
-      if (tabId === liveTabId) {
-        clearPendingEdits();
-        await reloadPage(pageNo.value);
-      } else if (tabSnapshots[tabId]) {
-        // 执行期间切走了 Tab：只清原 Tab 的待保存标记，不去刷新当前 Tab
-        tabSnapshots[tabId].pendingEdits = {};
-      }
-      ui.showToast(`${label}成功，共 ${statements.length} 条`, 'success');
-      return true;
+      list = await conn.withRetry(id => api.dbExecScript(id, conn.currentDatabase || '', sqlText));
     } catch (err) {
       addSqlLog(sqlText, { success: false, elapsed: Date.now() - started, error: err.message }, connData, db);
       ui.showToast(`${label}失败：${err.message}`, 'error');
       return false;
     }
+    const elapsed = Date.now() - started;
+    const failed = list.find(r => r.status === 'error');
+    const okCount = list.filter(r => r.status === 'success').length;
+    addSqlLog(sqlText, { success: !failed, elapsed, rows: list.length, error: failed ? failed.error : '' }, connData, db);
+    if (tabId === liveTabId) {
+      clearPendingEdits();
+      await reloadPage(pageNo.value);
+      // reloadPage 会重算结果状态并清掉列表，这里在刷新之后再落回逐条反馈。
+      // 单条不铺列表：那是最常见的单行改动，保住原结果表、只靠 toast 反馈即可
+      if (list.length > 1) stmtResults.value = list;
+    } else if (tabSnapshots[tabId]) {
+      // 执行期间切走了 Tab：只清原 Tab 的待保存标记，不去刷新当前 Tab
+      tabSnapshots[tabId].pendingEdits = {};
+      if (list.length > 1) tabSnapshots[tabId].stmtResults = list;
+    }
+    if (failed) {
+      ui.showToast(`${label}：成功 ${okCount} / 共 ${list.length} 条，第 ${list.indexOf(failed) + 1} 条失败：${failed.error}`, 'error');
+    } else {
+      ui.showToast(`${label}成功，共 ${list.length} 条`, 'success');
+    }
+    return !failed;
   }
 
   // 保存修改：把表内暂存的单元格修改汇总成多条 UPDATE
@@ -1495,7 +1584,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   return {
-    editor, draftSql, lastSql, lastResult, busy, columnModes, globalDisplay,
+    editor, draftSql, lastSql, lastResult, stmtResults, busy, columnModes, globalDisplay,
     queryTabs, activeTabId, activeTabs, newQueryTab, activateQueryTab, closeQueryTab, setSqlForTab,
     pageSize, pageNo, pageInfo, findState, matchCells, matchCount,
     execConfirm, filterDialog,

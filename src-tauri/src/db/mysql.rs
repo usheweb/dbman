@@ -18,7 +18,7 @@ use super::util::{
 use super::RelationalDriver;
 use crate::models::{
     ColumnDef, ColumnInfo, DbConfig, ExportColumn, FieldInfo, ForeignKeyDef, IndexDef,
-    QueryResponse, TableInfo, TableOptionDef, TableStructure,
+    QueryResponse, StatementResult, TableInfo, TableOptionDef, TableStructure,
 };
 
 pub struct MysqlDriver {
@@ -371,7 +371,7 @@ impl RelationalDriver for MysqlDriver {
         Ok(count)
     }
 
-    async fn exec_script(&self, database: &str, sql: &str) -> Result<u64, String> {
+    async fn exec_script(&self, database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let mut conn = self.conn.lock().await;
         use_database(&mut conn, database).await?;
 
@@ -379,14 +379,29 @@ impl RelationalDriver for MysqlDriver {
         if statements.is_empty() {
             return Err("没有可执行的语句".to_string());
         }
-        let mut count = 0u64;
-        for (idx, stmt) in statements.iter().enumerate() {
-            conn.query_drop(stmt.as_str())
-                .await
-                .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-            count += 1;
+        // 按条执行并记录每条的结果：失败即停，剩余语句标记 skipped，
+        // 让用户能清楚看到「哪条成功 / 哪条失败 / 哪条没跑」。
+        let mut out: Vec<StatementResult> = Vec::with_capacity(statements.len());
+        let mut stopped = false;
+        for stmt in statements {
+            if stopped {
+                out.push(StatementResult::skipped(stmt));
+                continue;
+            }
+            let started = std::time::Instant::now();
+            match consume_statement(&mut conn, &stmt).await {
+                Ok((rows, affected)) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::success(stmt, rows, affected, ms));
+                }
+                Err(e) => {
+                    let ms = started.elapsed().as_millis() as u64;
+                    out.push(StatementResult::error(stmt, e, ms));
+                    stopped = true;
+                }
+            }
         }
-        Ok(count)
+        Ok(out)
     }
 
     async fn distinct_values(
@@ -497,6 +512,27 @@ fn row_to_json(row: &Row) -> serde_json::Value {
         map.insert(name, value);
     }
     serde_json::Value::Object(map)
+}
+
+/// 执行单条语句并消费它可能产生的多个结果集，返回 (返回行数, 影响行数)。
+/// 与 `query()` 的消费写法一致：OK 包（无列段）累加 `affected_rows()`，
+/// 有列段按行读取计数；收尾再 `next()` 一次把多结果集里夹带的错误抛出来。
+async fn consume_statement(conn: &mut Conn, sql: &str) -> Result<(u64, u64), String> {
+    let mut result = conn.query_iter(sql).await.map_err(|e| e.to_string())?;
+    let mut rows_total: u64 = 0;
+    let mut affected: u64 = 0;
+    while let Some(cols) = result.columns() {
+        if cols.is_empty() {
+            affected += result.affected_rows();
+            let _ = result.next().await.map_err(|e| e.to_string())?;
+            continue;
+        }
+        while let Some(_row) = result.next().await.map_err(|e| e.to_string())? {
+            rows_total += 1;
+        }
+    }
+    let _ = result.next().await.map_err(|e| e.to_string())?;
+    Ok((rows_total, affected))
 }
 
 /// 查询某库的表（名 + 注释 + 排序维度元数据）。filter 非空时按表名/注释模糊匹配。

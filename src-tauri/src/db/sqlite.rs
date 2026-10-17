@@ -19,7 +19,7 @@ use super::util::{
 use super::RelationalDriver;
 use crate::models::{
     ColumnDef, ColumnInfo, DbConfig, ExportColumn, FieldInfo, ForeignKeyDef, IndexDef,
-    QueryResponse, TableInfo, TableOptionDef, TableStructure,
+    QueryResponse, StatementResult, TableInfo, TableOptionDef, TableStructure,
 };
 
 pub struct SqliteDriver {
@@ -386,20 +386,35 @@ impl RelationalDriver for SqliteDriver {
         .await
     }
 
-    async fn exec_script(&self, _database: &str, sql: &str) -> Result<u64, String> {
+    async fn exec_script(&self, _database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let sql = sql.to_string();
         self.with_conn(move |conn| {
             let statements = split_sql_statements(&sql);
             if statements.is_empty() {
                 return Err("没有可执行的语句".to_string());
             }
-            let mut count = 0u64;
-            for (idx, stmt) in statements.iter().enumerate() {
-                conn.execute_batch(stmt)
-                    .map_err(|e| format!("第 {} 条语句执行失败：{}", idx + 1, e))?;
-                count += 1;
+            // rusqlite 的 execute_batch 拿不到行数 / 影响行数，只区分成功与失败
+            let mut out: Vec<StatementResult> = Vec::with_capacity(statements.len());
+            let mut stopped = false;
+            for stmt in statements {
+                if stopped {
+                    out.push(StatementResult::skipped(stmt));
+                    continue;
+                }
+                let started = std::time::Instant::now();
+                match conn.execute_batch(&stmt) {
+                    Ok(()) => {
+                        let ms = started.elapsed().as_millis() as u64;
+                        out.push(StatementResult::success(stmt, 0, 0, ms));
+                    }
+                    Err(e) => {
+                        let ms = started.elapsed().as_millis() as u64;
+                        out.push(StatementResult::error(stmt, e.to_string(), ms));
+                        stopped = true;
+                    }
+                }
             }
-            Ok(count)
+            Ok(out)
         })
         .await
     }

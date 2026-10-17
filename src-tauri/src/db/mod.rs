@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use tauri::State;
 
 use crate::models::{
-    ColumnInfo, DbConfig, ExportColumn, QueryResponse, TableInfo, TableStructure,
+    ColumnInfo, DbConfig, ExportColumn, QueryResponse, StatementResult, TableInfo, TableStructure,
 };
 use crate::state::AppState;
 
@@ -75,8 +75,9 @@ pub trait RelationalDriver: Send + Sync {
         batch_size: i64,
     ) -> Result<u64, String>;
 
-    /// 执行一段（可含多条语句的）脚本，返回执行成功的语句数。
-    async fn exec_script(&self, database: &str, sql: &str) -> Result<u64, String>;
+    /// 执行一段（可含多条语句的）脚本，按条返回执行结果（失败即停、其余标记 skipped）。
+    async fn exec_script(&self, database: &str, sql: &str)
+        -> Result<Vec<StatementResult>, String>;
 
     /// 查询某表某字段的去重取值，供 AI 生成 SQL 时确认真实数据值。返回 (取值列表, 是否被截断)。
     async fn distinct_values(
@@ -275,10 +276,17 @@ pub async fn db_exec_script(
     conn_id: String,
     database: String,
     sql: String,
-) -> Result<u64, String> {
+) -> Result<Vec<StatementResult>, String> {
     state
         .get_driver(&conn_id)
         .await?
         .exec_script(&database, &sql)
         .await
+}
+
+/// 按顶层分号切分 SQL 脚本（纯本地，不连数据库）：供前端判断编辑器内容是否为多语句，
+/// 以便决定走「结果表格」还是「逐条执行结果反馈列表」。
+#[tauri::command]
+pub fn db_split_statements(sql: String) -> Vec<String> {
+    util::split_sql_statements(&sql)
 }
