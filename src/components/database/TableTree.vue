@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import { useWorkspaceStore } from '@/stores/workspace';
@@ -96,13 +96,37 @@ const filteredTables = computed(() => {
 // 过滤后再按排序键（可多列组合）排序
 const sortedTables = computed(() => sortTables(filteredTables.value, sortKeys.value));
 
-// 列表上方的数量统计：全量还没回来时先显示加载中（否则表数会从 20 跳到 N），
-// 无过滤词时给全量，有过滤词时给「命中 / 总数」
-const tableCountText = computed(() => {
-  if (connStore.tablesLoading) return '表列表加载中…';
+// 「表列表加载中…」延迟 1s 才显示：两个库之间快速来回切时，加载常常几十毫秒就结束，
+// 文案一闪而过看着像界面在抖；只有超过 1s 还没回来才提示，用户才确知是在等
+const loadingVisible = ref(false);
+let loadingTimer = null;
+watch(() => connStore.tablesLoading, (v) => {
+  clearTimeout(loadingTimer);
+  if (!v) {
+    loadingVisible.value = false;
+    return;
+  }
+  loadingTimer = setTimeout(() => { loadingVisible.value = true; }, 1000);
+}, { immediate: true });
+onBeforeUnmount(() => clearTimeout(loadingTimer));
+
+// 列表上方的数量统计：无过滤词时给全量，有过滤词时给「命中 / 总数」
+const countText = computed(() => {
   const total = connStore.allTables.length;
   if (!tokens.value.length) return '共 ' + total + ' 张表';
   return filteredTables.value.length + ' / ' + total + ' 张表';
+});
+
+// 加载一开始就把列表清空了，此时 countText 会算出「共 0 张表」；
+// 延迟显示的这 1s 内沿用上一屏的文案，否则快速切库时会闪一下「共 0 张表」
+const lastCountText = ref('');
+watch(countText, (v) => {
+  if (!connStore.tablesLoading) lastCountText.value = v;
+}, { immediate: true });
+
+const tableCountText = computed(() => {
+  if (!connStore.tablesLoading) return countText.value;
+  return loadingVisible.value ? '表列表加载中…' : lastCountText.value;
 });
 
 async function selectTable(tableName) {
