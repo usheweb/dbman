@@ -313,6 +313,21 @@ function cancelEdit(r, c) {
   editing.value = null;
 }
 
+// 点编辑框以外的任何位置都要收起输入框。
+// 表格里各处 mousedown 都调了 preventDefault（拦原生文本选中 / 拖动框选），
+// 而「焦点转移到被点的元素上」正是 mousedown 的默认行为之一——被 preventDefault 之后
+// input 就不失焦了，@blur 永远不触发，输入框会一直赖在单元格上。
+// 所以在 document 的捕获阶段兜底：命中点不在编辑框内就直接收起编辑态
+// （值在输入时已实时写回暂存，收起不会丢内容）。
+function onDocMouseDown(e) {
+  if (!editing.value) return;
+  if (editorEl && editorEl.contains(e.target)) return;
+  endEdit();
+}
+
+onMounted(() => document.addEventListener('mousedown', onDocMouseDown, true));
+onBeforeUnmount(() => document.removeEventListener('mousedown', onDocMouseDown, true));
+
 // 切查询 Tab / 换结果集时结束编辑态（值已实时写回，不会丢）
 watch(() => [ws.activeTabId, ws.lastResult], () => { editing.value = null; });
 
