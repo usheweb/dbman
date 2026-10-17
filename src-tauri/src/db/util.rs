@@ -15,8 +15,14 @@ pub(crate) fn strip_trailing_semicolons(sql: &str) -> String {
 /// 语句是否以 SELECT / WITH 开头（用于区分读/写，供各驱动复用）。
 pub(crate) fn starts_with_select_or_with(sql: &str) -> bool {
     let t = sql.trim_start();
+    // 关键词比较必须走字节切片：`t[..kw.len()]` 是按字节截断 &str，
+    // 一旦 SQL 开头几个字节里含多字节字符（例如以 `-- 中文注释` 起头的脚本，
+    // 「-- 待」的第 4 字节正好落在「待」字中间），就会 panic 在非字符边界上。
+    // 字节切片不受字符边界约束；只有前缀匹配成功后才用 `t[kw.len()..]`，
+    // 此时前 kw.len() 字节已确定是 ASCII 关键词，边界必然安全。
+    let tb = t.as_bytes();
     for kw in ["select", "with"] {
-        if t.len() >= kw.len() && t[..kw.len()].eq_ignore_ascii_case(kw) {
+        if tb.len() >= kw.len() && tb[..kw.len()].eq_ignore_ascii_case(kw.as_bytes()) {
             match t[kw.len()..].chars().next() {
                 None => return true,
                 Some(c) => {
