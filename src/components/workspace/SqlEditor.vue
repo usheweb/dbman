@@ -126,7 +126,8 @@ onMounted(() => {
   // 光标移动 / 行内容变化时同步「光标行是否为空」，决定要不要显示执行按钮
   cm.on('cursorActivity', syncCursorLineState);
   // 增删行后给新行补上播放图标（顺带同步行号栏宽度，行号位数变化会改变栏宽）
-  cm.on('changes', () => { fillRunGutters(); syncCursorLineState(); });
+  // 顺带让结果表头的排序箭头跟着 SQL 里的 ORDER BY 走：手改 / 删掉排序子句时箭头同步变化
+  cm.on('changes', () => { fillRunGutters(); syncCursorLineState(); ws.syncResultSort(); });
   // 刷新（窗口尺寸/折叠状态变化等）后重新量一次行号栏宽度
   cm.on('refresh', syncGutterWidth);
   // 编辑器是全局单实例：切连接会重建，这里把当前连接的 SQL 草稿灌回去
