@@ -6,7 +6,7 @@ export const TABLE_SORT_FIELDS = [
   { field: 'tableName', label: '表名', type: 'string', text: t => t.tableName || '' },
   { field: 'createTime', label: '创建时间', type: 'string', text: t => t.createTime || '' },
   { field: 'updateTime', label: '更新时间', type: 'string', text: t => t.updateTime || '' },
-  { field: 'tableRows', label: '数据行数', type: 'number', text: t => approxRows(t.tableRows) },
+  { field: 'tableRows', label: '数据行数', type: 'number', text: t => rowsText(t) },
   { field: 'dataLength', label: '数据大小', type: 'number', text: t => formatBytes(t.dataLength) },
   { field: 'indexLength', label: '索引大小', type: 'number', text: t => formatBytes(t.indexLength) },
   { field: 'totalLength', label: '总大小', type: 'number', text: t => formatBytes(t.totalLength) },
@@ -33,6 +33,21 @@ function fmtRows(v) {
 function approxRows(v) {
   const t = fmtRows(v);
   return t ? '约 ' + t : '';
+}
+
+// 精确行数（右键「精确行数」实时 COUNT 得到的值）展示原始整数：
+// 不再加「约」，也不能用 formatRows 的「万/亿」缩写，否则精确值看着仍像估算
+function exactRows(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (!isFinite(n)) return '';
+  return n.toLocaleString('zh-CN') + ' 行';
+}
+
+// 表项上的行数文案：没实时统计过的走估算（带「约」），统计过的显示精确值
+export function rowsText(t) {
+  if (!t) return '';
+  return t.tableRowsExact ? exactRows(t.tableRows) : approxRows(t.tableRows);
 }
 
 export function fieldLabel(field) {
@@ -105,7 +120,7 @@ export function metaText(table, keys, max = 3) {
 
 // 默认元信息：用户没额外指定排序维度时，表项下方固定展示「约 N 行 · 总大小」
 export function defaultMetaText(table) {
-  const rows = approxRows(table.tableRows);
+  const rows = rowsText(table);
   const size = formatBytes(table.totalLength);
   return [rows, size].filter(Boolean).join(' · ');
 }

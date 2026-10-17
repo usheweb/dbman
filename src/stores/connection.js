@@ -7,6 +7,7 @@ import { useStoreStore } from './store';
 import { useUiStore } from './ui';
 import { generateId } from '@/utils/format';
 import { isRelational, isMongoLike } from '@/utils/dbType';
+import { sqlIdent } from '@/utils/sql';
 
 // 句柄失效的精确文案，与 Rust 后端保持一致，用于触发静默重连
 const INVALID_CONN = 'Invalid connection';
@@ -435,6 +436,27 @@ export const useConnectionStore = defineStore('connection', () => {
     return loadTablesFor(activeId.value, db);
   }
 
+  // 表列表的行数是 information_schema.TABLES 的采样估算（InnoDB 小表经常报 0），
+  // 右键「精确行数」时才按需对单张表实时跑一次 COUNT(*)，结果写回该表项并标记为精确值。
+  // 只有这一张表付出 COUNT 的代价，列表依旧是一次性拉全量的秒开体验
+  async function countTableRows(tableName) {
+    const s = active.value;
+    if (!s) throw new Error('请先选择一个数据库连接');
+    const sql = `SELECT COUNT(*) AS row_count FROM ${sqlIdent(tableName)}`;
+    // limit=0：不套分页包装，原样下发这条语句
+    const res = await withRetryFor(s, id => api.dbQuery(id, sql, s.database, 0, 0));
+    const row = res && Array.isArray(res.rows) ? res.rows[0] : null;
+    const raw = row ? Object.values(row)[0] : null;
+    if (raw === null || raw === undefined) throw new Error('数据库未返回行数');
+    const count = Number(raw);
+    const t = s.allTables.find(x => x.tableName === tableName);
+    if (t) {
+      t.tableRows = count;
+      t.tableRowsExact = true;
+    }
+    return count;
+  }
+
   // 只拉列信息（补全引擎与结果表头注释都要用），错误吞掉由调用方决定
   async function loadColumnsFor(connId, db, table) {
     const s = sessions.value[connId];
@@ -490,6 +512,7 @@ export const useConnectionStore = defineStore('connection', () => {
     loadMySQLDatabases,
     selectDatabase,
     loadTables,
+    countTableRows,
     loadColumns
   };
 });

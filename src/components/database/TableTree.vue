@@ -40,7 +40,11 @@ function updateSort(keys) {
   ui.saveTableSort(keys);
 }
 
+// 正在统计精确行数的表名（同一时刻只统计一张，避免并发 COUNT 压库）
+const counting = ref('');
+
 function metaOf(table) {
+  if (counting.value === table.tableName) return '统计中…';
   // 有额外排序维度时展示排序维度值，否则默认展示「行数 · 总大小」
   return metaText(table, sortKeys.value) || defaultMetaText(table);
 }
@@ -53,6 +57,7 @@ const menuTable = ref('');
 
 const menuItems = [
   { label: '打开表（查看数据）', value: 'open' },
+  { label: '精确行数（COUNT(*)）', value: 'exactCount' },
   { label: '查看建表语句', value: 'ddl' },
   { label: '复制表名', value: 'copy' },
   { separator: true },
@@ -136,6 +141,20 @@ async function createLike(name) {
   await tableStore.createTableLike(name, next);
 }
 
+// 精确行数：只对这张表实时跑一次 COUNT(*)，结果写回表项（含提示里的行数一起变成精确值）
+async function exactCount(name) {
+  if (counting.value) return;
+  counting.value = name;
+  try {
+    const n = await connStore.countTableRows(name);
+    ui.showToast(`「${name}」精确行数：${n.toLocaleString('zh-CN')} 行`, 'success');
+  } catch (e) {
+    ui.showToast('获取精确行数失败：' + (e && e.message ? e.message : e), 'error');
+  } finally {
+    counting.value = '';
+  }
+}
+
 async function truncateTable(name) {
   const ok = await ui.askConfirm({
     title: '清空表（TRUNCATE）',
@@ -164,6 +183,7 @@ function onMenuSelect(item) {
   if (!name || !item) return;
   switch (item.value) {
     case 'open': selectTable(name); break;
+    case 'exactCount': exactCount(name); break;
     case 'ddl': tableStore.openDdl(name); break;
     case 'copy': copyTableName(name); break;
     case 'exportStructure': tableStore.openExportSql(name, 'structure'); break;
