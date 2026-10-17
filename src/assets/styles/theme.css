@@ -1671,6 +1671,8 @@
             letter-spacing: 1px;
             cursor: pointer;
             transition: all .2s ease;
+            /* 压在列宽拖动手柄之上：手柄贴表头右边缘，别挡住按钮最右侧一小截的点击 */
+            z-index: 2;
         }
         /* 没有注释可压的列（如纯时间戳字段）：按钮回到常规排版 */
         .col-mode.col-mode-solo {
@@ -1756,6 +1758,33 @@
             box-shadow: inset 0 -1px 0 rgba(var(--cyan-rgb), .35);
             /* 表头只用来点选整列：Shift 连选时不许出现原生文本选中（否则标题文字被拉出蓝色高亮） */
             user-select: none;
+        }
+        /* 列宽拖动手柄：压在表头单元格右侧内边距上的一条竖线。
+           表头是 position: sticky，本身就是定位元素，手柄不需要额外再给相对定位 */
+        .col-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+        }
+        /* 竖线默认透明，悬停表头或手柄本身时才点亮，避免表头出现一排常驻竖线 */
+        .col-resizer::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            right: 2px;
+            bottom: 3px;
+            width: 2px;
+            border-radius: 2px;
+            background: transparent;
+            transition: background .15s;
+        }
+        .data-table th:hover .col-resizer::after,
+        .col-resizer:hover::after,
+        .col-resizer.active::after {
+            background: var(--cyan);
         }
         .data-table td {
             background: rgba(var(--ink-rgb), .45);

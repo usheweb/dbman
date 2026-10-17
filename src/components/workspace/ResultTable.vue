@@ -191,7 +191,50 @@ function onDragEnd() {
 }
 
 onMounted(() => document.addEventListener('mouseup', onDragEnd));
-onBeforeUnmount(() => document.removeEventListener('mouseup', onDragEnd));
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', onDragEnd);
+  window.removeEventListener('mousemove', onResizeMove);
+  window.removeEventListener('mouseup', endResize);
+  document.body.style.cursor = '';
+});
+
+// ===== 列宽拖动：拖表头右边缘调整列宽（按列名记住，翻页 / 刷新后沿用） =====
+const MIN_COL_W = 48;
+const colWidths = ref({});  // 列名 → 宽度(px)
+const resizing = ref(null); // { col, startX, startW }，非 null 表示正在拖
+
+// 同时钉住 width / min-width / max-width：表格是自动布局，只写 width 时内容会把列顶宽，
+// 只写 max-width 时内容不足又会缩回去，三个一起写列才稳定停在拖到的宽度
+function colStyle(col) {
+  const w = colWidths.value[col];
+  if (!w) return null;
+  const px = w + 'px';
+  return { width: px, minWidth: px, maxWidth: px };
+}
+
+function startResize(e, col) {
+  const th = e.currentTarget.closest('th');
+  if (!th) return;
+  resizing.value = { col, startX: e.clientX, startW: Math.round(th.getBoundingClientRect().width) };
+  document.body.style.cursor = 'col-resize'; // 拖出表头范围后光标依然是拖动样式
+  window.addEventListener('mousemove', onResizeMove);
+  window.addEventListener('mouseup', endResize);
+}
+
+function onResizeMove(e) {
+  const st = resizing.value;
+  if (!st) return;
+  const next = Math.max(MIN_COL_W, st.startW + e.clientX - st.startX);
+  colWidths.value = { ...colWidths.value, [st.col]: next };
+}
+
+function endResize() {
+  if (!resizing.value) return;
+  resizing.value = null;
+  document.body.style.cursor = '';
+  window.removeEventListener('mousemove', onResizeMove);
+  window.removeEventListener('mouseup', endResize);
+}
 
 // ===== 待暂存的单元格修改 =====
 function pendingKind(r, c) {
@@ -428,7 +471,8 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             v-for="(col, c) in columns"
             :key="col"
             :data-col="col"
-            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；右键：排序 / 筛选'"
+            :style="colStyle(col)"
+            v-tip="'点击选择整列；Shift 连选；⌘/Ctrl 增减；右键：排序 / 筛选；右边缘可拖动调整列宽'"
             @click="onClickHeader($event, col, c)"
             @contextmenu.prevent="showHeaderMenu($event, col)"
           >
@@ -454,6 +498,16 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
               :class="{ active: modes[col] !== 'raw' }"
               @click.stop="ws.toggleColumnMode(col)"
             >{{ ws.MODE_LABEL[modes[col]] }}</button>
+            <!-- 列宽拖动手柄：压在表头右内边距上，按下即进入拖动，吞掉点击避免连带选中整列 -->
+            <span
+              class="col-resizer"
+              :class="{ active: resizing && resizing.col === col }"
+              v-tip="'拖动调整列宽'"
+              @mousedown.stop.prevent="startResize($event, col)"
+              @click.stop
+              @dblclick.stop
+              @contextmenu.stop.prevent
+            ></span>
           </th>
         </tr>
       </thead>
@@ -491,6 +545,7 @@ watch([() => ws.findState.index, () => ws.findState.keyword], async () => {
             v-for="(col, c) in columns"
             :key="col"
             :class="cellClass(ws.lastResult.data[r], col, r, c)"
+            :style="colStyle(col)"
             :data-value="rawText(ws.lastResult.data[r][col])"
             :data-midx="cellMidx(r, c)"
             v-tip="cellTitle(ws.lastResult.data[r], col, r, c)"
