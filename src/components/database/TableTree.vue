@@ -137,12 +137,24 @@ async function createLike(name) {
 }
 
 async function truncateTable(name) {
-  if (!confirm(`确定要清空表「${name}」吗？该操作不可撤销，且会重置自增 ID。`)) return;
+  const ok = await ui.askConfirm({
+    title: '清空表（TRUNCATE）',
+    message: `确定要清空表「${name}」吗？该操作不可撤销，且会重置自增 ID。`,
+    confirmText: '清空表',
+    danger: true
+  });
+  if (!ok) return;
   await tableStore.truncateTable(name);
 }
 
 async function dropTable(name) {
-  if (!confirm(`确定要删除表「${name}」吗？该操作不可撤销，表结构与数据将全部丢失。`)) return;
+  const ok = await ui.askConfirm({
+    title: '删除表（DROP）',
+    message: `确定要删除表「${name}」吗？该操作不可撤销，表结构与数据将全部丢失。`,
+    confirmText: '删除表',
+    danger: true
+  });
+  if (!ok) return;
   await tableStore.dropTable(name);
 }
 

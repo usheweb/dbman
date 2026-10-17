@@ -45,13 +45,19 @@ function onContextMenu(e) {
   menuVisible.value = true;
 }
 
-function onMenuSelect(item) {
+async function onMenuSelect(item) {
   menuVisible.value = false;
   const val = item && item.value;
   if (val === 'edit') {
     ui.openConnectionModal(props.conn);
   } else if (val === 'remove') {
-    if (confirm('确定要删除这个连接吗？')) connStore.removeConnection(props.conn.id);
+    const ok = await ui.askConfirm({
+      title: '删除连接',
+      message: `确定要删除连接「${props.conn.name || props.conn.host}」吗？`,
+      confirmText: '删除',
+      danger: true
+    });
+    if (ok) connStore.removeConnection(props.conn.id);
   } else if (val === 'disconnect') {
     connStore.closeTab(props.conn.id);
   }

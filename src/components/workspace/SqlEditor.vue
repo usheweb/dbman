@@ -188,7 +188,15 @@ async function openSqlFile() {
       ui.showToast('文件内容为空', 'error');
       return;
     }
-    if (ws.getSql().trim() && !confirm('编辑器里已有 SQL，载入文件会覆盖当前内容，确定继续吗？')) return;
+    if (ws.getSql().trim()) {
+      const ok = await ui.askConfirm({
+        title: '载入 SQL 文件',
+        message: '编辑器里已有 SQL，载入文件会覆盖当前内容，确定继续吗？',
+        confirmText: '覆盖载入',
+        danger: true
+      });
+      if (!ok) return;
+    }
     ws.setSql(text);
     ui.showToast('已载入 SQL 文件', 'success');
   } catch (e) {

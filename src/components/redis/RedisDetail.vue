@@ -106,7 +106,15 @@ const readonlyReason = computed(() => {
 async function onSaveValue(value) {
   // 清空集合等于删除该 key，先明确确认
   const emptied = Array.isArray(value) ? value.length === 0 : (value && typeof value === 'object' ? Object.keys(value).length === 0 : false);
-  if (emptied && !confirm('保存后该 Key 将不再有内容（等于删除），确定继续吗？')) return;
+  if (emptied) {
+    const ok = await ui.askConfirm({
+      title: '保存为空值',
+      message: '保存后该 Key 将不再有内容（等于删除），确定继续吗？',
+      confirmText: '继续保存',
+      danger: true
+    });
+    if (!ok) return;
+  }
   saving.value = true;
   try {
     await connStore.withRetry(id => api.redisSetValue(id, selectedKey.value, value));

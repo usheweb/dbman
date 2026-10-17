@@ -14,6 +14,7 @@ import ConnectionSidebar from '@/components/layout/ConnectionSidebar.vue';
 import DatabasePanel from '@/components/database/DatabasePanel.vue';
 import ConnectionModal from '@/components/connection/ConnectionModal.vue';
 import ContentModal from '@/components/modals/ContentModal.vue';
+import ConfirmModal from '@/components/modals/ConfirmModal.vue';
 import ExecConfirmModal from '@/components/modals/ExecConfirmModal.vue';
 import ExportModal from '@/components/modals/ExportModal.vue';
 import FilterModal from '@/components/modals/FilterModal.vue';
@@ -121,6 +122,7 @@ onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMe
 
   <ConnectionModal />
   <ContentModal />
+  <ConfirmModal />
   <ExecConfirmModal />
   <ExportModal />
   <FilterModal />

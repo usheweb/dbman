@@ -59,8 +59,14 @@ function deleteFav(f) {
   ui.showToast('已删除该条收藏', 'success');
 }
 
-function clearFavs() {
-  if (!confirm('确定清空全部 SQL 收藏吗？')) return;
+async function clearFavs() {
+  const ok = await ui.askConfirm({
+    title: '清空 SQL 收藏',
+    message: '确定清空全部 SQL 收藏吗？',
+    confirmText: '清空',
+    danger: true
+  });
+  if (!ok) return;
   sqlStore.clearFavs();
   ui.showToast('SQL 收藏已清空', 'success');
 }

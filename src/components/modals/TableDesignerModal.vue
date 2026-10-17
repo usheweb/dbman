@@ -128,7 +128,13 @@ async function apply() {
     ui.showToast('未检测到结构变更', 'error');
     return;
   }
-  if (!confirm(`即将对表「${tableName.value}」执行以下 DDL，修改期间可能锁表，且多条语句中途失败会留下半改状态。\n\n确定继续吗？`)) return;
+  const ok = await ui.askConfirm({
+    title: '执行表结构变更',
+    message: `即将对表「${tableName.value}」执行以下 DDL，修改期间可能锁表，且多条语句中途失败会留下半改状态。\n\n确定继续吗？`,
+    confirmText: '执行',
+    danger: true
+  });
+  if (!ok) return;
   applying.value = true;
   try {
     await table.execDdl(script, tableName.value, 'alter');
@@ -141,8 +147,16 @@ async function apply() {
   }
 }
 
-function close() {
-  if (hasChanges.value && !confirm('关闭将丢弃当前的修改，确定关闭吗？')) return;
+async function close() {
+  if (hasChanges.value) {
+    const ok = await ui.askConfirm({
+      title: '关闭表设计器',
+      message: '关闭将丢弃当前的修改，确定关闭吗？',
+      confirmText: '关闭',
+      danger: true
+    });
+    if (!ok) return;
+  }
   table.closeDesigner();
 }
 </script>

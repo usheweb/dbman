@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { newColumn, hasAutoInc, hasOnUpdate, isGenerated } from '@/utils/ddl';
 import IconSelect from '@/components/common/IconSelect.vue';
 import { useTableStore } from '@/stores/table';
+import { useUiStore } from '@/stores/ui';
 
 const props = defineProps({
   columns: { type: Array, required: true }
@@ -10,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['change']);
 
 const table = useTableStore();
+const ui = useUiStore();
 
 // 常用基础类型（不带参数）；长度 / 精度由右侧独立的参数输入框负责
 const BASE_TYPES = [
@@ -134,9 +136,17 @@ function addColumn() {
   touch();
 }
 
-function removeColumn(i) {
+async function removeColumn(i) {
   const c = props.columns[i];
-  if (c.name && !confirm(`确定删除字段「${c.name}」吗？执行后该字段及其数据将一并移除。`)) return;
+  if (c.name) {
+    const ok = await ui.askConfirm({
+      title: '删除字段',
+      message: `确定删除字段「${c.name}」吗？执行后该字段及其数据将一并移除。`,
+      confirmText: '删除',
+      danger: true
+    });
+    if (!ok) return;
+  }
   props.columns.splice(i, 1);
   touch();
 }

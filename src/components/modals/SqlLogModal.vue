@@ -58,8 +58,14 @@ function favFromLog(idx) {
   }
 }
 
-function clearLog() {
-  if (!confirm('确定清空全部 SQL 日志吗？')) return;
+async function clearLog() {
+  const ok = await ui.askConfirm({
+    title: '清空 SQL 日志',
+    message: '确定清空全部 SQL 日志吗？',
+    confirmText: '清空',
+    danger: true
+  });
+  if (!ok) return;
   sqlStore.clearLog();
   ui.showToast('SQL 日志已清空', 'success');
 }

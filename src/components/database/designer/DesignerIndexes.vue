@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { newIndex } from '@/utils/ddl';
+import { useUiStore } from '@/stores/ui';
 
 const props = defineProps({
   indexes: { type: Array, required: true },
@@ -12,6 +13,8 @@ const INDEX_TYPES = ['BTREE', 'HASH', 'FULLTEXT', 'SPATIAL'];
 
 const colNames = computed(() => props.columns.map(c => c.name).filter(Boolean));
 
+const ui = useUiStore();
+
 function touch() {
   emit('change');
 }
@@ -21,10 +24,16 @@ function addIndex() {
   touch();
 }
 
-function removeIndex(i) {
+async function removeIndex(i) {
   const ix = props.indexes[i];
   const label = ix.name || '（未命名索引）';
-  if (!confirm(`确定删除索引「${label}」吗？`)) return;
+  const ok = await ui.askConfirm({
+    title: '删除索引',
+    message: `确定删除索引「${label}」吗？`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   props.indexes.splice(i, 1);
   touch();
 }

@@ -31,6 +31,42 @@ export const useUiStore = defineStore('ui', () => {
   const toast = ref({ msg: '', type: 'success', visible: false });
   let toastTimer = null;
 
+  // 通用确认弹窗：原生 window.confirm 在本项目的 WKWebView 里不生效
+  // （wry 的 WKUIDelegate 未实现 runJavaScriptConfirmPanel，调用会被当成「取消」
+  // 静默返回 false，导致确认后什么都不发生），所以全项目的二次确认统一走这个自绘弹窗
+  const confirmModal = ref({
+    visible: false, title: '确认操作', message: '', confirmText: '确定', cancelText: '取消', danger: false
+  });
+  let confirmResolver = null;
+
+  // Promise 化的确认弹窗：确定 → true，取消 → false。
+  // 重复触发时先把上一个 pending 取消掉，避免旧调用方的 await 永不 resolve 而卡死
+  function askConfirm(opts = {}) {
+    if (confirmResolver) {
+      const prev = confirmResolver;
+      confirmResolver = null;
+      prev(false);
+    }
+    confirmModal.value = {
+      visible: true,
+      title: opts.title || '确认操作',
+      message: opts.message || '',
+      confirmText: opts.confirmText || '确定',
+      cancelText: opts.cancelText || '取消',
+      danger: !!opts.danger
+    };
+    return new Promise(resolve => {
+      confirmResolver = resolve;
+    });
+  }
+
+  function resolveConfirm(value) {
+    const resolve = confirmResolver;
+    confirmResolver = null;
+    confirmModal.value = { ...confirmModal.value, visible: false };
+    if (resolve) resolve(!!value);
+  }
+
   // 内容详情弹窗：当前查看的原始值（从单元格 data-value 来）
   const contentValue = ref('');
 
@@ -130,6 +166,7 @@ export const useUiStore = defineStore('ui', () => {
     panelState,
     modals,
     toast,
+    confirmModal,
     exportOpts,
     contentValue,
     connModalTarget,
@@ -145,6 +182,8 @@ export const useUiStore = defineStore('ui', () => {
     openModal,
     closeModal,
     showToast,
+    askConfirm,
+    resolveConfirm,
     saveExportOpts,
     saveTableSort,
     saveViewOpts,

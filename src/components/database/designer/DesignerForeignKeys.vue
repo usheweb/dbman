@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { newForeignKey } from '@/utils/ddl';
+import { useUiStore } from '@/stores/ui';
 
 const props = defineProps({
   foreignKeys: { type: Array, required: true },
@@ -13,6 +14,8 @@ const ACTIONS = ['RESTRICT', 'CASCADE', 'SET NULL', 'NO ACTION', 'SET DEFAULT'];
 
 const colNames = computed(() => props.columns.map(c => c.name).filter(Boolean));
 
+const ui = useUiStore();
+
 function touch() {
   emit('change');
 }
@@ -22,10 +25,16 @@ function addFk() {
   touch();
 }
 
-function removeFk(i) {
+async function removeFk(i) {
   const fk = props.foreignKeys[i];
   const label = fk.name || '（未命名外键）';
-  if (!confirm(`确定删除外键「${label}」吗？`)) return;
+  const ok = await ui.askConfirm({
+    title: '删除外键',
+    message: `确定删除外键「${label}」吗？`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   props.foreignKeys.splice(i, 1);
   touch();
 }

@@ -779,20 +779,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   // 有未保存的修改时翻页会丢弃它们，先问一句
-  function confirmDiscardEdits() {
+  async function confirmDiscardEdits() {
     if (!hasPendingEdits.value) return true;
-    return window.confirm('当前有未保存的单元格修改，翻页会丢弃这些修改，是否继续？');
+    return await ui.askConfirm({
+      title: '翻页会丢弃未保存的修改',
+      message: '当前有未保存的单元格修改，翻页会丢弃这些修改，是否继续？',
+      confirmText: '继续翻页',
+      danger: true
+    });
   }
 
-  function gotoPage(page) {
+  async function gotoPage(page) {
     if (!pageInfo.value.paged || page < 1) return;
     if (page > pageNo.value && !pageInfo.value.hasMore) return;
-    if (!confirmDiscardEdits()) return;
+    if (!(await confirmDiscardEdits())) return;
     return reloadPage(page);
   }
 
-  function changePageSize(value) {
-    if (!confirmDiscardEdits()) return;
+  async function changePageSize(value) {
+    if (!(await confirmDiscardEdits())) return;
     pageSize.value = parseInt(value, 10) || 300;
     store.set('dbman_page_size', String(pageSize.value));
     reloadPage(1);
@@ -1097,9 +1102,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   // 放弃修改：工具栏按钮用，确认后清掉全部暂存的单元格修改
-  function discardPendingEdits() {
+  async function discardPendingEdits() {
     if (!hasPendingEdits.value) return false;
-    if (!window.confirm(`确定放弃 ${pendingEditCount.value} 个未保存的单元格修改吗？`)) return false;
+    const ok = await ui.askConfirm({
+      title: '放弃未保存的修改',
+      message: `确定放弃 ${pendingEditCount.value} 个未保存的单元格修改吗？`,
+      confirmText: '放弃修改',
+      danger: true
+    });
+    if (!ok) return false;
     clearPendingEdits();
     return true;
   }
