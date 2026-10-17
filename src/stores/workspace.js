@@ -27,24 +27,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // CodeMirror 实例：必须 shallowRef，Vue 深代理会破坏 CM 内部结构
   const editor = shallowRef(null);
 
-  // 当前连接的 SQL 草稿：编辑器是全局单实例，切换连接时靠它换入换出
+  // 当前连接的 SQL 草稿：编辑器是全局单实例，切换连接 / 切库时靠它换入换出
   const draftSql = ref('');
 
-  // 查询 Tab：按连接分组（{ [connId]: { list: [{ id, name }], activeId, seq } }）
+  // 查询 Tab：按「连接 + 库」两级分组
+  // （{ [connId]: { [db]: { list: [{ id, name }], activeId, seq } } }）
+  // 同一个连接的每个库各自一套查询 Tab：切库时整体换入换出，SQL 草稿与查询结果都跟着库走，
+  // 既不会串库也不会丢。库还没选中时先归到空串这组，选中库后整组过继给该库
   const queryTabs = ref({});
   // 各查询 Tab 的工作区快照（非响应式，切 Tab 时换入换出）
   const tabSnapshots = {};
   // 已换入 live 状态的 Tab（非响应式镜像：连接切走后 activeTabId 会立刻变 null，拿不到来源 Tab）
   let liveTabId = null;
 
-  const activeTabId = computed(() => {
-    const g = queryTabs.value[conn.currentConnId];
-    return g ? g.activeId : null;
+  // 当前 (连接 + 库) 对应的 Tab 组
+  const activeGroup = computed(() => {
+    const byDb = queryTabs.value[conn.currentConnId];
+    return byDb ? byDb[conn.currentDatabase || ''] : null;
   });
-  const activeTabs = computed(() => {
-    const g = queryTabs.value[conn.currentConnId];
-    return g ? g.list : [];
-  });
+  const activeTabId = computed(() => (activeGroup.value ? activeGroup.value.activeId : null));
+  const activeTabs = computed(() => (activeGroup.value ? activeGroup.value.list : []));
 
   const lastSql = ref('');
   const lastResult = ref(null); // { data, fields, colInfo }
@@ -266,13 +268,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (withSql && editor.value) editor.value.setValue(t.sql || '');
   }
 
-  // 该连接的 Tab 组；list 为空时自动建一个「查询 1」
-  function ensureTabs(connId) {
-    let g = queryTabs.value[connId];
-    if (!g) {
-      g = { list: [], activeId: null, seq: 0 };
-      queryTabs.value[connId] = g;
-    }
+  // 指定 (连接 + 库) 的 Tab 组；list 为空时自动建一个「查询 1」
+  function ensureTabs(connId, db) {
+    if (!queryTabs.value[connId]) queryTabs.value[connId] = {};
+    // 回读一次，拿到的是响应式代理，后面增删库分组才会被追踪到
+    const byDb = queryTabs.value[connId];
+    const key = db || '';
+    if (!byDb[key]) byDb[key] = { list: [], activeId: null, seq: 0 };
+    const g = byDb[key];
     if (!g.list.length) {
       const id = generateId();
       g.seq = 1;
@@ -280,6 +283,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       g.activeId = id;
     }
     return g;
+  }
+
+  // 一条连接上首次选中库时，把「未选库」那组 Tab 整组过继给这个库。
+  // 不做这一步的话，用户连着库先把 SQL 写好、再点选库时，刚写的草稿会凭空消失
+  function adoptNoDbGroup(connId, db) {
+    const byDb = queryTabs.value[connId];
+    const orphan = byDb && byDb[''];
+    if (!orphan || byDb[db]) return; // 该库已经有一套自己的 Tab 就不动
+    delete byDb[''];
+    byDb[db] = orphan;
   }
 
   // 换入某个 Tab：写回它的状态、切换 live 标记，并换入该 Tab 的 AI 栏状态
@@ -307,27 +320,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     cancelTabScopedDialogs();
     if (fromId) tabSnapshots[fromId] = captureTab();
     enterTab(toId);
-    // 当前连接的 Tab 组里把选中态同步过来（新建 / 点击切换都走这里）
-    const g = queryTabs.value[conn.currentConnId];
-    if (g) g.activeId = toId;
+    // 当前 (连接 + 库) 的 Tab 组里把选中态同步过来（新建 / 点击切换都走这里）
+    if (activeGroup.value) activeGroup.value.activeId = toId;
   }
 
   function activateQueryTab(id) { switchTab(id); }
 
-  // 新建 Tab：编号接在该连接已有编号之后
+  // 新建 Tab：编号接在「该连接该库」已有编号之后
   function newQueryTab() {
     const connId = conn.currentConnId;
     if (!connId) return;
-    const g = ensureTabs(connId);
+    const g = ensureTabs(connId, conn.currentDatabase);
     g.seq += 1;
     const id = generateId();
     g.list.push({ id, name: '查询 ' + g.seq });
     switchTab(id);
   }
 
-  // 每个连接至少保留一个 Tab；关闭当前 Tab 且有待保存修改时先问一句
+  // 每个库至少保留一个 Tab；关闭当前 Tab 且有待保存修改时先问一句
   function closeQueryTab(id) {
-    const g = queryTabs.value[conn.currentConnId];
+    const g = activeGroup.value;
     if (!g || g.list.length <= 1) return;
     if (id === liveTabId && !confirmDiscardEdits()) return;
     const idx = g.list.findIndex(t => t.id === id);
@@ -364,10 +376,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     snap.sql = sql;
   }
 
-  // 切换连接：进入目标连接上次的 Tab（没有就自动建「查询 1」）
-  watch(() => conn.currentConnId, (nid) => {
+  // 切换连接 / 切换库：换入目标 (连接 + 库) 上次的 Tab，没有就自动建「查询 1」。
+  // 因为 Tab 组是按「连接 + 库」分的，切库时当前这组的 SQL 与结果会先存进各自快照，
+  // 再换入新库那组——所以每个库各写各的，来回切都不丢
+  watch(() => [conn.currentConnId, conn.currentDatabase], ([nid, ndb], [oid, odb]) => {
     if (nid) {
-      switchTab(ensureTabs(nid).activeId);
+      // 同一条连接上首次选中库：把「未选库」那组 Tab 过继给这个库（详见 adoptNoDbGroup）
+      if (nid === oid && !odb && ndb) adoptNoDbGroup(nid, ndb);
+      switchTab(ensureTabs(nid, ndb).activeId);
     } else {
       if (liveTabId) tabSnapshots[liveTabId] = captureTab();
       applyTabSnapshot(null);
@@ -376,14 +392,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   });
 
-  // 连接关闭后一并丢弃它的所有 Tab 与快照
+  // 连接关闭后一并丢弃它的所有 Tab 与快照（含该连接下每个库各自的那套）
   watch(() => conn.openIds, ids => {
     const keep = new Set(ids);
     Object.keys(queryTabs.value).forEach(connId => {
       if (keep.has(connId)) return;
-      queryTabs.value[connId].list.forEach(t => {
-        delete tabSnapshots[t.id];
-        if (aiRef) aiRef.dropTabState(t.id);
+      Object.values(queryTabs.value[connId]).forEach(g => {
+        g.list.forEach(t => {
+          delete tabSnapshots[t.id];
+          if (aiRef) aiRef.dropTabState(t.id);
+        });
       });
       delete queryTabs.value[connId];
     });
