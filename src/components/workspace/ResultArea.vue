@@ -26,7 +26,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 <template>
   <div class="result-area">
     <div class="result-header">
-      <span>查询结果</span>
       <span>{{ ws.stmtResults ? ws.stmtResults.length + ' 条语句' : (ws.lastResult ? ws.lastResult.data.length + ' 行' : '') }}</span>
       <div class="result-tools">
         <button
