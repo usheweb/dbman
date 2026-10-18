@@ -366,7 +366,7 @@ function headerItems() {
   const items = [
     { label: '仅按此列升序', value: 'sort-asc' },
     { label: '仅按此列降序', value: 'sort-desc' },
-    { label: '筛选…', value: 'filter' }
+    { label: '筛选', value: 'filter' }
   ];
   if (hasSort || hasWhere) items.push({ separator: true });
   if (hasSort) items.push({ label: '清除排序', value: 'clear-sort', danger: true });
@@ -396,8 +396,8 @@ function rowHeadItems() {
 function cellItems() {
   return [
     { label: '复制', value: 'copy' },
-    { label: '查看内容…', value: 'view' },
-    { label: '编辑内容…', value: 'edit' },
+    { label: '查看内容', value: 'view' },
+    { label: '编辑内容', value: 'edit' },
     { separator: true },
     { label: '设置为空白字符串', value: 'set-empty' },
     { label: '设置为 NULL', value: 'set-null', disabled: nullDisabled() },

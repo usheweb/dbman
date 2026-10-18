@@ -17,7 +17,9 @@ watch(() => ui.confirmModal.visible, async (v) => {
 </script>
 
 <template>
-  <ModalShell :visible="ui.confirmModal.visible" width="480px" @close="ui.resolveConfirm(false)">
+  <!-- modal-top：确认弹窗常常是从其它弹窗（表结构设计器、SQL 收藏等）内部唤起的，
+       两者默认 z-index 相同，靠后的弹窗会把它整个盖住，这里抬高层级让确认框可见 -->
+  <ModalShell class="modal-top" :visible="ui.confirmModal.visible" width="480px" @close="ui.resolveConfirm(false)">
     <template #title>{{ ui.confirmModal.title }}</template>
     <div class="confirm-body">
       <div class="confirm-tip">{{ ui.confirmModal.message }}</div>

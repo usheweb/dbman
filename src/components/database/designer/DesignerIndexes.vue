@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { newIndex } from '@/utils/ddl';
 import { useUiStore } from '@/stores/ui';
+import ColumnPicker from './ColumnPicker.vue';
 
 const props = defineProps({
   indexes: { type: Array, required: true },
@@ -38,8 +39,8 @@ async function removeIndex(i) {
   touch();
 }
 
-function setColumns(ix, text) {
-  ix.columns = String(text).split(/[,，]+/).map(s => s.trim()).filter(Boolean);
+function setColumns(ix, list) {
+  ix.columns = (list || []).slice();
   touch();
 }
 
@@ -59,7 +60,7 @@ function isPrimary(ix) {
     <div class="dz-toolbar">
       <button class="btn btn-secondary" @click="addIndex">+ 添加索引</button>
       <span class="dz-count">{{ indexes.length }} 个索引</span>
-      <span class="dz-hint">索引名填 PRIMARY 即为主键；多个列按顺序用逗号分隔（如 a, b）。可用列：{{ colNames.join(', ') || '无' }}</span>
+      <span class="dz-hint">索引名填 PRIMARY 即为主键；列从下拉里点选（可输入关键字定位），先点的排在前面，再点一次移出。</span>
     </div>
 
     <div class="dz-body">
@@ -80,9 +81,12 @@ function isPrimary(ix) {
         <span class="dz-c">
           <input type="checkbox" v-model="ix.unique" :disabled="isPrimary(ix)" @change="touch">
         </span>
-        <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false"
-          :value="(ix.columns || []).join(', ')" placeholder="col1, col2"
-          @input="setColumns(ix, $event.target.value)">
+        <ColumnPicker
+          :model-value="ix.columns || []"
+          :options="colNames"
+          placeholder="点选字段（可输入定位）"
+          @update:model-value="setColumns(ix, $event)"
+        />
         <span class="dz-c dz-acts">
           <button class="dz-mini dz-danger" v-tip="'删除索引'" @click="removeIndex(i)">&times;</button>
         </span>

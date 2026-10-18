@@ -96,7 +96,7 @@ function argsPlaceholder(c) {
 function typeOptions(c) {
   const cur = typeBase(c.columnType);
   const list = cur && !BASE_TYPES.includes(cur) ? [cur, ...BASE_TYPES] : BASE_TYPES;
-  return [...list.map(t => ({ value: t, label: t })), { value: CUSTOM_TYPE, label: '自定义类型…' }];
+  return [...list.map(t => ({ value: t, label: t })), { value: CUSTOM_TYPE, label: '自定义类型' }];
 }
 
 // 选类型：类型名没变就保留原参数，换了类型则套用该类型的默认参数

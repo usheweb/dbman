@@ -190,21 +190,34 @@ export function buildAlterScript(original, draft, table) {
   if (fkDrops.length) statements.push(alter(t, fkDrops));
 
   // 2) 删除索引（被移除或改定义的）
+  // 主键要单独处理：MySQL 支持 DROP PRIMARY KEY，但主键列带 AUTO_INCREMENT 时单独执行
+  // 会报 ERROR 1075（Incorrect table definition; there can be only one auto column and it
+  // must be defined as a key），删完主键那一刻该列不再是任何键的一部分。
+  // 所以「改主键」时把 DROP 并进新增那条语句（MySQL 支持同语句内先删后加），
+  // 只有「整条删除主键」才单独生成 DROP PRIMARY KEY。
+  const draftPrimary = draftIndexes.find(x => x.name === 'PRIMARY');
   const idxDrops = [];
+  let primarySwap = false;
   origIndexes.forEach(oi => {
     const di = draftIndexes.find(x => x.origName === oi.name);
-    if (!di || indexChanged(oi, di)) idxDrops.push(indexDropClause(oi));
+    if (di && !indexChanged(oi, di)) return;
+    if (oi.name === 'PRIMARY') {
+      if (draftPrimary) primarySwap = true;
+      else idxDrops.push('DROP PRIMARY KEY');
+      return;
+    }
+    idxDrops.push(indexDropClause(oi));
   });
   if (idxDrops.length) statements.push(alter(t, idxDrops));
 
-  // 3) 列变更 + 新增索引合并为一条：新增自增列要求同语句内带键
+  // 3) 主键重建 + 列变更 + 新增索引合并为一条：新增自增列要求同语句内带键
   const cols = columnClauses(origCols, draftCols);
   const idxAdds = [];
   draftIndexes.forEach(di => {
     const oi = di.origName ? origIndexes.find(x => x.name === di.origName) : null;
     if (!oi || indexChanged(oi, di)) idxAdds.push(indexAddClause(di));
   });
-  const combined = [...cols, ...idxAdds];
+  const combined = primarySwap ? ['DROP PRIMARY KEY', ...cols, ...idxAdds] : [...cols, ...idxAdds];
   if (combined.length) statements.push(alter(t, combined));
 
   // 4) 新增外键
