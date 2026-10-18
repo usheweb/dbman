@@ -1,6 +1,6 @@
 [package]
 name = "dbman"
-version = "1.4.0"
+version = "1.4.1"
 description = "唐三浪DBMan - 基于 Tauri + Rust 的现代桌面数据库管理工具"
 authors = ["tangsanlang"]
 license = "MIT"
