@@ -25,6 +25,7 @@ export const useUiStore = defineStore('ui', () => {
     favEditModal: false,
     aiConfigModal: false,
     viewSettingsModal: false,
+    aboutModal: false,
     promoModal: false
   });
 
@@ -79,8 +80,10 @@ export const useUiStore = defineStore('ui', () => {
   // 表列表排序键（可多列组合），持久化
   const tableSort = ref(DEFAULT_TABLE_SORT.map(k => ({ ...k })));
 
-  // 视图显示选项：表列表里是否显示表注释 / 数据行数与大小 + SQL 编辑器是否折叠 + 查询结果历史条数上限，持久化
-  const viewOpts = ref({ tableComment: true, tableMeta: true, sqlCollapsed: false, resultHistoryMax: 100 });
+  // 视图显示选项：表列表里是否显示表注释 / 数据行数与大小 + SQL 编辑器是否折叠 + 查询结果历史条数上限
+  // + 表列表面板宽度（treeWidth，px）+ SQL 编辑器高度（editorHeight，px，0 表示用默认百分比）
+  // + 连接/数据库侧栏宽度（sidebarWidth，px），全部持久化
+  const viewOpts = ref({ tableComment: true, tableMeta: true, sqlCollapsed: false, resultHistoryMax: 100, treeWidth: 300, editorHeight: 0, sidebarWidth: 290 });
 
   // 结果区全屏：把窗口让给结果表，只对当前会话有效，不持久化
   const resultFullscreen = ref(false);

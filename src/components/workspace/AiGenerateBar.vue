@@ -77,12 +77,12 @@ function formatElapsed(ms) {
           </button>
         </div>
       </div>
-      <button class="btn" :disabled="ai.generating" @click="onGenerate">
+      <button class="btn-line" :disabled="ai.generating" @click="onGenerate">
         {{ ai.generating ? '生成中…' : (ai.hasSession ? '继续微调' : 'AI 生成') }}
       </button>
       <button
         v-if="ai.hasSession"
-        class="btn btn-secondary"
+        class="btn-line"
         :disabled="ai.generating"
         v-tip="'丢弃上一轮上下文，从头生成'"
         @click="onRegenerate"
@@ -225,9 +225,10 @@ function formatElapsed(ms) {
   cursor: default;
 }
 
-/* 按钮不许被压扁换行 */
-.ai-bar-row .btn {
+/* 按钮不许被压扁换行；固定最小宽度，避免「AI 生成 / 生成中… / 继续微调」切换时按钮横向抖动 */
+.ai-bar-row .btn-line {
   flex: 0 0 auto;
+  min-width: 84px;
   white-space: nowrap;
 }
 

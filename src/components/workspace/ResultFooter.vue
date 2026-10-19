@@ -8,6 +8,9 @@ import { escapeHtml } from '@/utils/escape';
 const ws = useWorkspaceStore();
 const ui = useUiStore();
 
+// 编译期常量（vite.config.js 的 define 注入），在状态栏右下角展示当前版本
+const version = __APP_VERSION__;
+
 // 执行中计时：慢查询 / 被元数据锁挡住时，秒数在走才能说明「还在跑」而不是「卡死了」，
 // 否则用户只能盯着一个空白结果面板 + 转圈的图标猜
 const busyMs = ref(0);
@@ -147,5 +150,11 @@ async function commitPage() {
       :disabled="!ws.lastSql || ws.pageInfo.idle || ws.pageInfo.write || !!ws.stmtResults"
       @click="ui.openModal('exportModal')"
     >【数据导出】</button>
+    <!-- 当前版本：贴右下角，点击打开「关于」看产品说明 / 联系方式 / 官网 -->
+    <button
+      class="footer-version"
+      v-tip="'查看版本与产品说明'"
+      @click="ui.openModal('aboutModal')"
+    >v{{ version }}</button>
   </div>
 </template>

@@ -177,6 +177,15 @@ export function scopedColumnRefs(cm, connStore) {
   return out;
 }
 
+// 语句只引用了一张表、且这张表没起别名时，列名前缀毫无意义（不会有歧义），
+// 补全就不该带表名：敲 `where good` 期望拿到 goods_code，而不是 t.goods_code。
+// 多表 / 有别名时前缀是区分列归属用的，必须保留。
+export function bareColumnSingleTable(cm, connStore) {
+  const refs = parseTableRefs(cm.getRange({ line: 0, ch: 0 }, cm.getCursor()));
+  const keys = Object.keys(refs);
+  return keys.length === 1 && keys[0] === refs[keys[0]].toLowerCase();
+}
+
 export function isTableItem(item) {
   return typeof item === 'object' && String((item && item.className) || '').indexOf('CodeMirror-hint-table') !== -1;
 }
@@ -235,10 +244,11 @@ export function buildFuzzyPool(cm, search, poolMode, connStore) {
     });
   }
   if (poolMode === 'table') return pool;
-  // column 上下文：先把语句里已经用到的表的字段按「别名.字段 / 表名.字段」列出来
+  // column 上下文：先把语句里已经用到的表的字段列出来（单表不加前缀，见 bareColumnSingleTable）
   if (poolMode === 'keyword') {
+    const bare = bareColumnSingleTable(cm, connStore);
     scopedColumnRefs(cm, connStore).forEach(r => {
-      pool.push({ text: `${r.prefix}.${r.columnName}`, match: r.columnName, query: raw });
+      pool.push({ text: bare ? r.columnName : `${r.prefix}.${r.columnName}`, match: r.columnName, query: raw });
     });
   }
   // 模式里的 keywords 可能是数组、空格分隔的字符串，或 {关键字: true} 映射，都要兼容
@@ -285,8 +295,9 @@ export function sqlHintFuzzy(cm, options, connStore) {
       const seenIdle = {};
       list.forEach(it => { seenIdle[typeof it === 'string' ? it : it.text] = true; });
       const idle = [];
+      const bare = bareColumnSingleTable(cm, connStore);
       scopedColumnRefs(cm, connStore).forEach(r => {
-        const text = `${r.prefix}.${r.columnName}`;
+        const text = bare ? r.columnName : `${r.prefix}.${r.columnName}`;
         if (seenIdle[text]) return;
         seenIdle[text] = true;
         idle.push({ text });

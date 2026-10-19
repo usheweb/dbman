@@ -24,6 +24,7 @@ import SqlFavModal from '@/components/modals/SqlFavModal.vue';
 import FavEditModal from '@/components/modals/FavEditModal.vue';
 import AiConfigModal from '@/components/modals/AiConfigModal.vue';
 import ViewSettingsModal from '@/components/modals/ViewSettingsModal.vue';
+import AboutModal from '@/components/modals/AboutModal.vue';
 import PromptModal from '@/components/modals/PromptModal.vue';
 import TableDdlModal from '@/components/modals/TableDdlModal.vue';
 import ExportSqlModal from '@/components/modals/ExportSqlModal.vue';
@@ -84,6 +85,43 @@ function onCtxSelect(item) {
   }
 }
 
+// ===== 连接/数据库侧栏宽度：拖它与右侧内容区的边界调整，宽度持久化在 ui.viewOpts.sidebarWidth =====
+const SIDEBAR_W_DEFAULT = 290; // 双击分隔条恢复到这个宽度
+const SIDEBAR_W_MIN = 200;
+const sidebarRef = ref(null);
+const sidebarResizing = ref(false);
+// 收起态下交给 .app-container.sidebar-collapsed 的 46px，不要用内联变量盖掉它
+const appStyle = computed(() => (ui.panelState.sidebar
+  ? {}
+  : { '--sidebar-w': (ui.viewOpts.sidebarWidth || SIDEBAR_W_DEFAULT) + 'px' }));
+
+let sidebarFromX = 0;
+let sidebarFromW = 0;
+function startSidebarResize(e) {
+  if (ui.panelState.sidebar) return; // 收起态只有 46px，没有可拖的余地
+  const el = sidebarRef.value && sidebarRef.value.$el;
+  sidebarFromX = e.clientX;
+  sidebarFromW = el ? el.getBoundingClientRect().width : (ui.viewOpts.sidebarWidth || SIDEBAR_W_DEFAULT);
+  sidebarResizing.value = true;
+  document.addEventListener('mousemove', onSidebarResizeMove);
+  document.addEventListener('mouseup', stopSidebarResize);
+  e.preventDefault();
+}
+function onSidebarResizeMove(e) {
+  // 上限取窗口宽度的 40%，再宽就把库表/查询区挤没了
+  const max = Math.max(SIDEBAR_W_MIN + 60, Math.min(window.innerWidth * 0.4, 560));
+  const w = Math.min(max, Math.max(SIDEBAR_W_MIN, sidebarFromW + (e.clientX - sidebarFromX)));
+  ui.saveViewOpts({ sidebarWidth: Math.round(w) });
+}
+function stopSidebarResize() {
+  sidebarResizing.value = false;
+  document.removeEventListener('mousemove', onSidebarResizeMove);
+  document.removeEventListener('mouseup', stopSidebarResize);
+}
+function resetSidebarWidth() {
+  ui.saveViewOpts({ sidebarWidth: SIDEBAR_W_DEFAULT });
+}
+
 // 启动引导：先把本地文件里的数据读进内存，后面的渲染/绑定才有正确的初始状态
 onMounted(async () => {
   await store.load();
@@ -106,14 +144,30 @@ onMounted(async () => {
   document.addEventListener('contextmenu', onDocContextMenu);
 });
 
-onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMenu));
+onBeforeUnmount(() => {
+  document.removeEventListener('contextmenu', onDocContextMenu);
+  stopSidebarResize();
+});
 </script>
 
 <template>
-  <div class="app-container" :class="{ 'result-fs': ui.resultFullscreen, 'sidebar-collapsed': ui.panelState.sidebar }">
+  <div
+    class="app-container"
+    :class="{ 'result-fs': ui.resultFullscreen, 'sidebar-collapsed': ui.panelState.sidebar }"
+    :style="appStyle"
+  >
     <AppHeader />
     <div class="main-content">
-      <ConnectionSidebar />
+      <ConnectionSidebar ref="sidebarRef" />
+      <div v-if="!ui.panelState.sidebar" class="sidebar-splitter">
+        <div
+          class="splitter-v"
+          :class="{ resizing: sidebarResizing }"
+          v-tip="'拖动调整连接/数据库列表宽度；双击恢复默认'"
+          @mousedown="startSidebarResize"
+          @dblclick="resetSidebarWidth"
+        ></div>
+      </div>
       <div class="content-area">
         <DatabasePanel />
       </div>
@@ -132,6 +186,7 @@ onBeforeUnmount(() => document.removeEventListener('contextmenu', onDocContextMe
   <FavEditModal />
   <AiConfigModal />
   <ViewSettingsModal />
+  <AboutModal />
   <PromptModal />
   <TableDdlModal />
   <ExportSqlModal />

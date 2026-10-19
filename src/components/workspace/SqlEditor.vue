@@ -205,8 +205,9 @@ async function openSqlFile() {
   }
 }
 
-// 折叠编辑器 / 结果区全屏都会让 CodeMirror 容器消失再出现，恢复后刷新一下，避免内容空白或光标错位
-watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen], () => {
+// 折叠编辑器 / 结果区全屏 / 拖动分隔条改高度，都会让 CodeMirror 容器尺寸变化，
+// 恢复或变化后刷新一下，避免内容空白或光标错位
+watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen, () => ui.viewOpts.editorHeight], () => {
   nextTick(() => { if (cm) cm.refresh(); });
 });
 </script>
