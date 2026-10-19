@@ -83,6 +83,88 @@ function clickOnRunBtn(instance, e) {
   return Math.abs((e.clientX - box.left) - box.width / 2) <= 11.5;
 }
 
+// ===== 执行前静态体检：标出当前库里不存在的表名 / 列名 =====
+// 只做两类低误报判断：未知表名、未知「别名.列」；列信息还没缓存过的表一律放过，
+// 避免把「结构还没加载」误判成错误。标红只是提示，不影响执行。
+const NOT_ALIAS_SQL = ['WHERE', 'ON', 'GROUP', 'ORDER', 'LIMIT', 'OFFSET', 'HAVING', 'UNION', 'SET',
+  'VALUES', 'USING', 'AND', 'OR', 'NOT', 'IN', 'IS', 'LIKE', 'BETWEEN', 'AS', 'LEFT', 'RIGHT',
+  'INNER', 'OUTER', 'FULL', 'CROSS', 'JOIN', 'STRAIGHT_JOIN'];
+let lintMarks = [];
+let lintTimer = null;
+
+// 字符串字面量与注释的区间：这些地方出现的「表名 / 列名」是数据不是标识符，不能标红
+function skipRanges(sql) {
+  const ranges = [];
+  [
+    /\/\*[\s\S]*?\*\//g, /--[^\n\r]*/g, /#[^\n\r]*/g,
+    /'(?:[^'\\]|\\.|'')*'/g, /"(?:[^"\\]|\\.|"")*"/g
+  ].forEach(re => {
+    let m;
+    while ((m = re.exec(sql))) ranges.push([m.index, m.index + m[0].length]);
+  });
+  return ranges;
+}
+
+function inRanges(pos, len, ranges) {
+  const end = pos + len;
+  return ranges.some(([s, e]) => pos < e && end > s);
+}
+
+function markUnknown(start, len) {
+  const from = cm.posFromIndex(start);
+  const to = cm.posFromIndex(start + len);
+  lintMarks.push(cm.markText(from, to, { className: 'cm-unknown-ident' }));
+}
+
+function runLint() {
+  if (!cm) return;
+  lintMarks.forEach(m => m.clear());
+  lintMarks = [];
+  const sql = cm.getValue();
+  // 表列表还没加载出来时不做判断，否则整篇 SQL 都会被标成未知表
+  if (!sql.trim() || !conn.allTables.length) return;
+  const known = {};
+  conn.allTables.forEach(t => { known[t.tableName.toLowerCase()] = t.tableName; });
+  const ranges = skipRanges(sql);
+  // 表名：FROM / JOIN / UPDATE / INTO 后面引用的名字
+  const refs = {};
+  const tre = /\b(?:from|join|update|into)\s+`?([A-Za-z_$][\w$]*)`?/gi;
+  let m;
+  while ((m = tre.exec(sql))) {
+    if (inRanges(m.index, m[0].length, ranges)) continue;
+    const name = m[1];
+    refs[name.toLowerCase()] = name;
+    if (known[name.toLowerCase()]) continue;
+    markUnknown(m.index + m[0].lastIndexOf(name), name.length);
+  }
+  // 别名 → 真实表名（表名本身也可以当前缀写，一并登记）
+  const are = /\b(?:from|join)\s+`?([A-Za-z_$][\w$]*)`?\s+(?:as\s+)?`?([A-Za-z_$][\w$]*)`?/gi;
+  while ((m = are.exec(sql))) {
+    if (inRanges(m.index, m[0].length, ranges)) continue;
+    if (NOT_ALIAS_SQL.indexOf(m[2].toUpperCase()) !== -1) continue;
+    refs[m[2].toLowerCase()] = m[1];
+  }
+  // 「别名.列」：只有别名能对上真实表、且该表列信息已缓存时才判断列存不存在
+  const colsCache = {};
+  const cre = /\b([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\b/g;
+  while ((m = cre.exec(sql))) {
+    if (inRanges(m.index, m[0].length, ranges)) continue;
+    const table = refs[m[1].toLowerCase()];
+    if (!table) continue;
+    const key = Object.keys(conn.tableColumns).find(k => k.toLowerCase() === table.toLowerCase());
+    if (!key) continue; // 列信息还没缓存：放过，不误报
+    if (!colsCache[key]) colsCache[key] = (conn.tableColumns[key] || []).map(c => String(c.columnName).toLowerCase());
+    if (colsCache[key].indexOf(m[2].toLowerCase()) !== -1) continue;
+    markUnknown(m.index + m[1].length + 1, m[2].length);
+  }
+}
+
+// 每次改动后延后一点重算：连续敲键时不必每一下都全篇扫一遍
+function scheduleLint() {
+  if (lintTimer) clearTimeout(lintTimer);
+  lintTimer = setTimeout(runLint, 200);
+}
+
 onMounted(() => {
   cm = CodeMirror.fromTextArea(ta.value, {
     mode: 'text/x-mysql',
@@ -100,7 +182,9 @@ onMounted(() => {
     extraKeys: {
       'Ctrl-Space': () => showSqlHint(cm, conn),
       // 这里不能直接传 executeQuery：CodeMirror 会把 cm 实例当第一个参数传入，会被误当作「已确认」
-      'Ctrl-Enter': () => ws.executeQuery()
+      'Ctrl-Enter': () => ws.executeQuery(),
+      // 一键把光标所在语句的 SELECT * 展开成列清单
+      'Ctrl-Shift-E': () => ws.expandStar()
     }
   });
   ws.setEditor(cm);
@@ -110,7 +194,8 @@ onMounted(() => {
     const typed = change.origin === '+delete'
       ? change.removed[0]
       : (change.origin === '+input' ? change.text[0] : '');
-    if (!typed || typed.length !== 1 || !/[\w.]/.test(typed)) return;
+    // 字母 / 下划线 / 点：补标识符；比较符（= > <）：紧接着就是填值，先把取值模板弹出来
+    if (!typed || typed.length !== 1 || !/[\w.=<]/.test(typed)) return;
     showSqlHint(instance, conn);
   });
   // 行内「执行这一行」：点击行号左侧的播放图标只跑该行 SQL，不覆盖编辑器内容
@@ -127,7 +212,7 @@ onMounted(() => {
   cm.on('cursorActivity', syncCursorLineState);
   // 增删行后给新行补上播放图标（顺带同步行号栏宽度，行号位数变化会改变栏宽）
   // 顺带让结果表头的排序箭头跟着 SQL 里的 ORDER BY 走：手改 / 删掉排序子句时箭头同步变化
-  cm.on('changes', () => { fillRunGutters(); syncCursorLineState(); ws.syncResultSort(); });
+  cm.on('changes', () => { fillRunGutters(); syncCursorLineState(); ws.syncResultSort(); scheduleLint(); });
   // 刷新（窗口尺寸/折叠状态变化等）后重新量一次行号栏宽度
   cm.on('refresh', syncGutterWidth);
   // 编辑器是全局单实例：切连接会重建，这里把当前连接的 SQL 草稿灌回去
@@ -136,7 +221,11 @@ onMounted(() => {
   syncCursorLineState();
   // CodeMirror 5 对 gutter marker 是懒渲染，初次挂载后强制刷新一次，否则播放图标不出 DOM
   cm.refresh();
+  scheduleLint();
 });
+
+// 表列表 / 列信息是异步加载进来的：加载完成后要重算一次体检，否则体检结果一直停在「未知表」
+watch([() => conn.allTables.length, () => Object.keys(conn.tableColumns).length], scheduleLint);
 
 // 主题切换时同步 CodeMirror 皮肤（实例只初始化一次，这里改 option 即可）
 watch(() => theme.editorTheme, (name) => {
@@ -144,6 +233,7 @@ watch(() => theme.editorTheme, (name) => {
 });
 
 onBeforeUnmount(() => {
+  if (lintTimer) clearTimeout(lintTimer);
   if (!cm) return;
   cm.getWrapperElement()?.remove();
   cm = null;
@@ -251,7 +341,15 @@ watch([() => ui.viewOpts.sqlCollapsed, () => ui.resultFullscreen, () => ui.viewO
           </svg>
           <span class="btn-label">格式化</span>
         </button>
-        <button class="icon-btn exec-btn" v-tip="'执行 SQL（Ctrl+Enter）'" @click="ws.executeQuery()">
+        <button class="icon-btn" v-tip="'把 SELECT * 展开成列清单（Ctrl+Shift+E）'" @click="ws.expandStar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4v16" />
+            <path d="M5.3 8l13.4 8" />
+            <path d="M18.7 8L5.3 16" />
+          </svg>
+          <span class="btn-label">展开 *</span>
+        </button>
+        <button class="icon-btn exec-btn" :disabled="ws.busy || ws.execBusy" v-tip="ws.execBusy ? 'SQL 执行中…' : '执行 SQL（Ctrl+Enter）'" @click="ws.executeQuery()">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M8 5v14l11-7z" />
           </svg>

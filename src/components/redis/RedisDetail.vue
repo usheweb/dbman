@@ -99,7 +99,21 @@ const valueEditable = computed(() => !!data.value && EDIT_TYPES.includes(data.va
 const readonlyReason = computed(() => {
   const d = data.value;
   if (!d || EDIT_TYPES.includes(d.type)) return '';
-  return d.type === 'stream' ? '暂不支持在此修改 stream 类型' : '暂不支持在此修改该类型';
+  if (d.type === 'stream') return '暂不支持在此修改 stream 类型';
+  // TYPE 对不存在的 key 返回 none（列表点开后刚好过期/被删时会走到这里）
+  if (d.type === 'none') return '该 Key 已不存在（可能已过期）';
+  return '暂不支持在此修改该类型';
+});
+
+// 后端对 stream 等未支持的类型没有取内容（redis_cmd.rs 里以 null 兜底），
+// 把一个 null 渲染出来只会显示字面量「null」，让人误以为值就是 null，这里换成明确提示
+const valueUnavailable = computed(() => !!data.value && data.value.value == null);
+
+const valueUnavailableText = computed(() => {
+  const d = data.value;
+  if (d && d.type === 'stream') return 'stream 类型暂不支持展示内容';
+  if (d && d.type === 'none') return '该 Key 已不存在（可能已过期）';
+  return '该 Key 当前没有可展示的内容';
 });
 
 // ===== 修改内容 =====
@@ -168,7 +182,7 @@ async function saveTtl() {
     <template v-else>
       <!-- Key 名先显示出来，让点击立刻有反馈 -->
       <div class="redis-head">
-        <h3>{{ selectedKey }}</h3>
+        <h3 class="redis-key-title">{{ selectedKey }}</h3>
         <div v-if="data" class="redis-meta">
           <span class="redis-badge">{{ data.type }}</span>
           <span class="redis-ttl">
@@ -212,8 +226,10 @@ async function saveTtl() {
           @cancel="editing = false"
         />
         <template v-else>
+          <!-- stream / key 已不存在时后端值为 null，直接渲染会显示字面量「null」，改为明确提示 -->
+          <div v-if="valueUnavailable" class="redis-empty">{{ valueUnavailableText }}</div>
           <!-- 值可能很长：盒子内部滚动，头部信息保持可见 -->
-          <div class="large-textarea redis-value" v-html="displayHtml"></div>
+          <div v-else class="large-textarea redis-value" v-html="displayHtml"></div>
         </template>
       </template>
     </template>
@@ -231,6 +247,14 @@ async function saveTtl() {
 
 .redis-head h3 {
   margin-bottom: 10px;
+}
+
+/* 全局默认禁止拖选（见 theme.css 的 .app-container），这里单独放开标题，
+   方便用户直接选中整条 Key 名拖走复制 */
+.redis-key-title {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .redis-meta {

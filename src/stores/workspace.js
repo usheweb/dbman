@@ -54,6 +54,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const refreshing = ref(false); // 刷新动作是否在进行（含最短可见时长，见 refreshResult）
   // 结果区刷新按钮的可见态：执行中变暗 + 图标转圈
   const busy = computed(() => loading.value || refreshing.value);
+  // 从点下「执行」到结果回来全程置位：含危险语句二次确认、多语句切分这段窗口，
+  // 只用来禁用执行按钮防重复触发；loading 只表示在等数据库回包，不能承担这个语义
+  const execBusy = ref(false);
   const columnModes = ref({});  // 单列显式覆盖
   const globalDisplay = ref({ timestamp: false, enum: false });
 
@@ -742,16 +745,30 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function executeQuery(confirmed) {
-    const ok = await runSql(getSql(), confirmed);
-    notifyWriteDone(ok);
-    return ok;
+    // 上一次执行还没结束（含确认弹窗 / 切分语句阶段）就直接挡掉，避免重复触发
+    if (execBusy.value || busy.value) return false;
+    execBusy.value = true;
+    try {
+      const ok = await runSql(getSql(), confirmed);
+      notifyWriteDone(ok);
+      return ok;
+    } finally {
+      execBusy.value = false;
+    }
   }
 
-  // 编辑器行内「执行这一行」：直接跑传入的文本，不覆盖编辑器里的完整脚本
-  async function executeSqlText(sql) {
-    const ok = await runSql(sql);
-    notifyWriteDone(ok);
-    return ok;
+  // 编辑器行内「执行这一行」：直接跑传入的文本，不覆盖编辑器里的完整脚本。
+  // force 供「换集合自动查询」这类必须执行、不能被防连点挡掉的路径使用
+  async function executeSqlText(sql, force) {
+    if (!force && (execBusy.value || busy.value)) return false;
+    execBusy.value = true;
+    try {
+      const ok = await runSql(sql);
+      notifyWriteDone(ok);
+      return ok;
+    } finally {
+      execBusy.value = false;
+    }
   }
 
   // 刷新按钮的最短可见时长：本地小表往往几十毫秒就返回，不兜底用户看不到任何反馈
@@ -852,6 +869,79 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function setSqlAndRun(sql) {
     setSql(sql);
     executeQuery();
+  }
+
+  // ===== 往编辑器里回填文本（结果表头右键「插入列名」等）=====
+  // 插在光标处而不是覆盖整篇：用户往往是在补 ON 条件 / 字段清单，覆盖会毁掉手写内容
+  function insertAtEditorCursor(text) {
+    const cm = editor.value;
+    if (!cm) { ui.showToast('编辑器还没准备好', 'error'); return; }
+    const pos = cm.getCursor();
+    cm.replaceRange(String(text == null ? '' : text), pos, pos, 'complete');
+    cm.focus();
+  }
+
+  // 语句里 FROM / JOIN 的表与其别名（别名优先当列前缀，多表无别名时才用表名）
+  const NOT_ALIAS = ['WHERE', 'ON', 'GROUP', 'ORDER', 'LIMIT', 'OFFSET', 'HAVING', 'UNION', 'SET',
+    'VALUES', 'USING', 'AND', 'OR', 'NOT', 'IN', 'IS', 'LIKE', 'BETWEEN', 'AS', 'LEFT', 'RIGHT',
+    'INNER', 'OUTER', 'FULL', 'CROSS', 'JOIN', 'STRAIGHT_JOIN'];
+  function fromRefs(stmt) {
+    const out = [];
+    const re = /\b(?:from|join)\s+`?([A-Za-z_$][\w$]*)`?(?:\s+(?:as\s+)?`?([A-Za-z_$][\w$]*)`?)?/gi;
+    let m;
+    while ((m = re.exec(stmt))) {
+      let alias = m[2] || '';
+      if (alias && NOT_ALIAS.indexOf(alias.toUpperCase()) !== -1) alias = '';
+      out.push({ table: m[1], alias });
+    }
+    return out;
+  }
+
+  // ===== SELECT * 一键展开列清单 =====
+  // 把光标所在语句里的 `*` 换成该表所有列（带反引号）；列多时按 SELECT 的缩进换行对齐。
+  // 只在当前这一条语句里找（分号切开），且取离光标最近的那个 *
+  function expandStar() {
+    const cm = editor.value;
+    if (!cm) return;
+    const sql = cm.getValue();
+    const curOff = cm.indexFromPos(cm.getCursor());
+    const from = sql.lastIndexOf(';', Math.max(0, curOff - 1)) + 1;
+    let end = sql.indexOf(';', curOff);
+    if (end === -1) end = sql.length;
+    const stmt = sql.slice(from, end);
+    const re = /\bselect\b\s+(?:distinct\s+)?\*/gi;
+    let m;
+    let star = -1;
+    while ((m = re.exec(stmt))) {
+      const at = from + m.index + m[0].length - 1;
+      if (star === -1 || Math.abs(at - curOff) < Math.abs(star - curOff)) star = at;
+    }
+    if (star === -1) { ui.showToast('光标所在语句里没有可展开的 SELECT *', 'error'); return; }
+    const refs = fromRefs(stmt);
+    if (!refs.length) { ui.showToast('先补全 FROM 表名再展开 *', 'error'); return; }
+    const keys = Object.keys(conn.tableColumns);
+    const multi = refs.length > 1;
+    const cols = [];
+    const missing = [];
+    refs.forEach(r => {
+      const realKey = keys.find(k => k.toLowerCase() === String(r.table).toLowerCase());
+      if (!realKey) { missing.push(r.table); return; }
+      const prefix = r.alias ? r.alias + '.' : (multi ? r.table + '.' : '');
+      (conn.tableColumns[realKey] || []).forEach(c => cols.push(prefix + sqlIdent(c.columnName)));
+    });
+    if (!cols.length) {
+      // 列信息还没缓存（用户直接手写 SQL，没点过左侧表名）：拉一次，让他稍后再点
+      missing.forEach(t => { if (conn.currentDatabase) conn.loadColumns(conn.currentDatabase, t); });
+      ui.showToast('表结构还没加载，请稍等一下再展开 *', 'error');
+      return;
+    }
+    const starPos = cm.posFromIndex(star);
+    const indent = (cm.getLine(starPos.line).match(/^\s*/) || [''])[0];
+    let text = cols.join(', ');
+    if (text.length > 70) text = cols.join(',\n' + indent + '  ');
+    cm.replaceRange(text, starPos, { line: starPos.line, ch: starPos.ch + 1 }, 'complete');
+    cm.focus();
+    syncResultSort();
   }
 
   // ===== 结果表头右键：排序 / 筛选（改写编辑器 SQL 的对应子句）=====
@@ -1703,10 +1793,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     resultColumns, columnModesForRender, visibleRowIndexes,
     MODE_LABEL,
     init, setEditor, getSql, setSql, setSqlAndRun, applyDraft,
+    insertAtEditorCursor, expandStar,
     currentColComments, effectiveColumnMode, applyDisplayMode, analyzeColumns,
     toggleGlobalMode, toggleColumnMode,
     rowHit, cellHit, recomputeMatches,
-    executeQuery, executeSqlText, refreshResult, reloadPage, gotoPage, changePageSize,
+    executeQuery, executeSqlText, execBusy, refreshResult, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
     rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
     resultSort, syncResultSort, toggleSort,

@@ -82,8 +82,9 @@ export const useUiStore = defineStore('ui', () => {
 
   // 视图显示选项：表列表里是否显示表注释 / 数据行数与大小 + SQL 编辑器是否折叠 + 查询结果历史条数上限
   // + 表列表面板宽度（treeWidth，px）+ SQL 编辑器高度（editorHeight，px，0 表示用默认百分比）
-  // + 连接/数据库侧栏宽度（sidebarWidth，px），全部持久化
-  const viewOpts = ref({ tableComment: true, tableMeta: true, sqlCollapsed: false, resultHistoryMax: 100, treeWidth: 300, editorHeight: 0, sidebarWidth: 290 });
+  // + 连接/数据库侧栏宽度（sidebarWidth，px）+ Redis key 列表宽度（redisTreeWidth，px），全部持久化。
+  // redisTreeWidth 为 0 表示「用户没拖过」，此时按内容自适应（回到旧行为）
+  const viewOpts = ref({ tableComment: true, tableMeta: true, sqlCollapsed: false, resultHistoryMax: 100, treeWidth: 300, editorHeight: 0, sidebarWidth: 290, redisTreeWidth: 0 });
 
   // 结果区全屏：把窗口让给结果表，只对当前会话有效，不持久化
   const resultFullscreen = ref(false);

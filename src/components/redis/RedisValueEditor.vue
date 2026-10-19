@@ -220,7 +220,8 @@ function submit() {
     <p v-if="error" class="redis-editor-err">{{ error }}</p>
 
     <div class="redis-editor-actions">
-      <button class="btn btn-secondary" @click="addRow">
+      <!-- string 的值是单个字符串，没有「元素」可加，按钮只在列表型内容下出现 -->
+      <button v-if="type !== 'string'" class="btn btn-secondary" @click="addRow">
         {{ type === 'hash' ? '+ 添加字段' : (type === 'zset' ? '+ 添加成员' : '+ 添加元素') }}
       </button>
       <span class="redis-editor-spacer"></span>

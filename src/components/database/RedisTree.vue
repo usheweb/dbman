@@ -1,5 +1,5 @@
 <script setup>
-import { watch, computed, onBeforeUnmount } from 'vue';
+import { watch, computed, ref, onBeforeUnmount } from 'vue';
 import { useUiStore } from '@/stores/ui';
 import { useConnectionStore } from '@/stores/connection';
 import {
@@ -8,6 +8,7 @@ import {
 } from '@/composables/useRedis';
 import ItemIcon from '@/components/common/ItemIcon.vue';
 import IconSelect from '@/components/common/IconSelect.vue';
+import ContextMenu from '@/components/common/ContextMenu.vue';
 
 const ui = useUiStore();
 const connStore = useConnectionStore();
@@ -54,6 +55,38 @@ const KEY_ICONS = {
 };
 function keyIcon(type) {
   return KEY_ICONS[type] || 'rkey-none';
+}
+
+// 右键菜单：目前只有复制 Key（与表列表的右键菜单同一套 ContextMenu 组件）
+const menuVisible = ref(false);
+const menuX = ref(0);
+const menuY = ref(0);
+const menuKey = ref('');
+
+const menuItems = [
+  { label: '复制 Key', value: 'copy' }
+];
+
+function onContextMenu(e, name) {
+  menuKey.value = name;
+  menuX.value = e.clientX;
+  menuY.value = e.clientY;
+  menuVisible.value = true;
+}
+
+async function copyKey(name) {
+  try {
+    await navigator.clipboard.writeText(name);
+    ui.showToast('已复制 Key', 'success');
+  } catch (err) {
+    ui.showToast('复制失败', 'error');
+  }
+}
+
+function onMenuSelect(item) {
+  menuVisible.value = false;
+  if (!menuKey.value || !item) return;
+  if (item.value === 'copy') copyKey(menuKey.value);
 }
 
 // 连接是异步建立的：currentConnData 先就绪、后端句柄 serverConnId 后赋值，
@@ -182,6 +215,7 @@ async function onNextPage() {
         class="tree-item key-item"
         :class="{ active: selectedKey === k.name }"
         @click="selectedKey = k.name"
+        @contextmenu.prevent="onContextMenu($event, k.name)"
       >
         <ItemIcon :name="keyIcon(k.type)" v-tip="k.type" />
         <span class="key-name">{{ k.name }}</span>
@@ -194,6 +228,14 @@ async function onNextPage() {
       <span class="tree-pager-info" v-tip="pagerText">{{ pagerText }}</span>
       <button class="row-btn" v-tip="'下一页'" :disabled="!hasNext" @click="onNextPage">›</button>
     </div>
+    <ContextMenu
+      v-if="menuVisible"
+      :x="menuX"
+      :y="menuY"
+      :items="menuItems"
+      @select="onMenuSelect"
+      @close="menuVisible = false"
+    />
   </div>
 </template>
 

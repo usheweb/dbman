@@ -366,7 +366,10 @@ function headerItems() {
   const items = [
     { label: '仅按此列升序', value: 'sort-asc' },
     { label: '仅按此列降序', value: 'sort-desc' },
-    { label: '筛选', value: 'filter' }
+    { label: '筛选', value: 'filter' },
+    // 手写 SQL 时要引用某列，直接从结果表头拿名字，省得再去翻表结构
+    { separator: true },
+    { label: '插入列名到编辑器', value: 'insert-col' }
   ];
   if (hasSort || hasWhere) items.push({ separator: true });
   if (hasSort) items.push({ label: '清除排序', value: 'clear-sort', danger: true });
@@ -466,6 +469,9 @@ function onMenuSelect(item) {
     ws.openFilterDialog(col);
   } else if (val === 'clear-sort') {
     ws.clearResultSort();
+  } else if (val === 'insert-col') {
+    ws.insertAtEditorCursor(col);
+    ui.showToast(`已插入列名 ${col}`, 'success');
   } else if (val === 'clear-where') {
     ws.clearResultFilter();
   } else if (val === 'set-empty' || val === 'set-null') {

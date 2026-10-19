@@ -533,7 +533,7 @@
             text-transform: uppercase;
             transition: all .2s ease;
         }
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             color: var(--on-accent);
             border-color: var(--cyan);
             background: linear-gradient(135deg, rgba(var(--cyan-rgb), .32), rgba(var(--violet-rgb), .3));
@@ -542,6 +542,11 @@
         }
         .btn:active {
             transform: translateY(0);
+        }
+        /* 通用按钮禁用态（执行中）：置灰且不响应悬停，避免看起来还能点 */
+        .btn:disabled {
+            opacity: .4;
+            cursor: not-allowed;
         }
         .btn-secondary {
             background: rgba(var(--overlay-rgb), .03);
@@ -1182,6 +1187,13 @@
             min-width: 46px;
             max-width: 46px;
         }
+        /* —— Redis key 列表：用户没拖过宽度时按内容自适应（沿用旧行为，下限 260 / 上限 360），
+              拖动过一次后由 --tree-w 固定宽度，不再随内容自动变化 —— */
+        .db-tree-wrap.auto {
+            width: auto;
+            min-width: 260px;
+            max-width: 360px;
+        }
 
         /* —— 可拖动分隔条：竖条调面板宽度（表列表右边缘），横条调结果区高度；竖线只在悬停/拖动时点亮 —— */
         .splitter-v {
@@ -1724,6 +1736,39 @@
         }
         li.CodeMirror-hint-keyword {
             color: var(--violet) !important;
+        }
+        /* 语句骨架模板（s → SELECT * FROM ）：与表名、关键字区分开，一眼能认出来是模板 */
+        li.CodeMirror-hint-snippet {
+            color: var(--green) !important;
+        }
+        /* 候选分色：序号 / 字段名 / 类型 / 注释各一段，名字与说明一眼分得开 */
+        .CodeMirror-hint .hint-num {
+            margin-right: 6px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        .CodeMirror-hint .hint-name {
+            color: var(--cyan);
+            font-family: var(--font-mono);
+        }
+        .CodeMirror-hint .hint-type {
+            margin-left: 8px;
+            color: var(--green);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            opacity: .85;
+        }
+        .CodeMirror-hint .hint-comment {
+            margin-left: 8px;
+            color: var(--text-dim);
+            font-size: 11px;
+        }
+        /* 执行前静态体检：当前库里不存在的表名 / 列名，用波浪线提示（只是提示，不拦执行） */
+        .cm-unknown-ident {
+            text-decoration: underline wavy var(--magenta);
+            text-decoration-thickness: 1px;
+            text-underline-offset: 3px;
         }
         /* 弹窗里只读 SQL 的语法着色，配色对齐编辑器（配合 utils/sql.js 的 highlightSqlSyntax）。
            这些 class 是 v-html 注入的，作用域样式命中不到，必须放在全局 */

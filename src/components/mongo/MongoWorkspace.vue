@@ -13,16 +13,20 @@ const connStore = useConnectionStore();
 const ws = useWorkspaceStore();
 const { selectedCollection, mode, filterText, sortText, projectionText, pipelineText, knownFields } = useMongo();
 
-async function run() {
+// 执行中（含等数据库回包、刷新）：按钮置灰，避免连点重复查询
+const running = computed(() => ws.busy || ws.execBusy);
+
+// force=true 只给「换集合自动查询」用：这次点击必须生效，不能被防连点挡掉
+async function run(force) {
   if (!selectedCollection.value || !connStore.currentDatabase) return;
-  await ws.executeSqlText(buildSpec());
+  await ws.executeSqlText(buildSpec(), force);
 }
 
 // 选中集合就自动查一次，省去「选中 → 再点执行」的多余步骤（与表树点表的行为一致）
 watch(selectedCollection, name => {
   clearMongoFields(); // 换集合了，字段名字典重新攒
   if (!name) return;
-  run();
+  run(true);
 });
 
 // 每次出结果就把列名并进候选字段：字段筛选一旦生效，结果只剩被选中的列，
@@ -267,14 +271,14 @@ const filterEl = ref(null);
             <!-- 执行按钮挪到这一排最前面：默认只露播放图标，鼠标移上去才展开「执行 / 执行中…」 -->
             <button
               class="btn mongo-run"
-              :disabled="ws.busy"
-              v-tip="ws.busy ? '执行中…' : '执行'"
-              @click="run"
+              :disabled="running"
+              v-tip="running ? '执行中…' : '执行'"
+              @click="run()"
             >
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M5 3.4v9.2l8-4.6-8-4.6Z" />
               </svg>
-              <span class="mongo-run-text">{{ ws.busy ? '执行中…' : '执行' }}</span>
+              <span class="mongo-run-text">{{ running ? '执行中…' : '执行' }}</span>
             </button>
             <template v-if="chipInfos.length">
               <button
