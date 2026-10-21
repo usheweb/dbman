@@ -54,8 +54,10 @@ const menuVisible = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
 const menuTable = ref('');
+// 在列表空白处右键：没有具体表可操作，只提供「刷新表列表」
+const menuEmpty = ref(false);
 
-const menuItems = [
+const TABLE_MENU_ITEMS = [
   { label: '打开表（查看数据）', value: 'open' },
   { label: '精确行数（COUNT(*)）', value: 'exactCount' },
   { label: '查看建表语句', value: 'ddl' },
@@ -71,6 +73,11 @@ const menuItems = [
   { label: '清空表（TRUNCATE）', value: 'truncate', danger: true },
   { label: '删除表（DROP）', value: 'drop', danger: true }
 ];
+
+const menuItems = computed(() => {
+  if (menuEmpty.value) return [{ label: '刷新表列表', value: 'refresh' }];
+  return [{ label: '刷新表列表', value: 'refresh' }, { separator: true }, ...TABLE_MENU_ITEMS];
+});
 
 // 库数量常上百个，下拉支持输入模糊筛选
 const dbOptions = computed(() => connStore.currentDatabaseList.map(db => ({ value: db, label: db })));
@@ -139,9 +146,35 @@ async function selectTable(tableName) {
 
 function onContextMenu(e, tableName) {
   menuTable.value = tableName;
+  menuEmpty.value = false;
   menuX.value = e.clientX;
   menuY.value = e.clientY;
   menuVisible.value = true;
+}
+
+// 列表空白处右键：没有表可操作，只给「刷新表列表」，用于外部建表后手动拉取
+function onListContextMenu(e) {
+  menuTable.value = '';
+  menuEmpty.value = true;
+  menuX.value = e.clientX;
+  menuY.value = e.clientY;
+  menuVisible.value = true;
+}
+
+// 刷新表列表：重新从 information_schema 拉当前库的全部表（外部工具建表后用它同步）
+async function refreshTables() {
+  const db = connStore.currentDatabase;
+  if (!db) {
+    ui.showToast('请先选择数据库', 'error');
+    return;
+  }
+  if (connStore.tablesLoading) return;
+  try {
+    await connStore.loadTables(db);
+    ui.showToast(`已刷新「${db}」的表列表`, 'success');
+  } catch (e) {
+    ui.showToast('刷新表列表失败：' + (e && e.message ? e.message : e), 'error');
+  }
 }
 
 async function copyTableName(name) {
@@ -203,8 +236,14 @@ async function dropTable(name) {
 
 function onMenuSelect(item) {
   menuVisible.value = false;
+  if (!item) return;
+  // 刷新与具体表无关，空白处右键也能用
+  if (item.value === 'refresh') {
+    refreshTables();
+    return;
+  }
   const name = menuTable.value;
-  if (!name || !item) return;
+  if (!name) return;
   switch (item.value) {
     case 'open': selectTable(name); break;
     case 'exactCount': exactCount(name); break;
@@ -264,14 +303,14 @@ function onMenuSelect(item) {
       </button>
     </div>
     <div v-if="connStore.currentDatabase" class="tree-count-row" v-tip="tableCountText">{{ tableCountText }}</div>
-    <div id="tableList">
+    <div id="tableList" @contextmenu.prevent="onListContextMenu">
       <div
         v-for="t in sortedTables"
         :key="t.tableName"
         class="tree-item tree-table"
         :class="{ active: connStore.currentTable === t.tableName }"
         @click="selectTable(t.tableName)"
-        @contextmenu.prevent="onContextMenu($event, t.tableName)"
+        @contextmenu.stop.prevent="onContextMenu($event, t.tableName)"
       >
         <ItemIcon name="table" />
         <span class="tree-table-body">

@@ -373,7 +373,11 @@ impl RelationalDriver for MysqlDriver {
 
     async fn exec_script(&self, database: &str, sql: &str) -> Result<Vec<StatementResult>, String> {
         let mut conn = self.conn.lock().await;
-        use_database(&mut conn, database).await?;
+        // 未选择库时不能发 USE ``，否则整个脚本会在第一条就失败、一条语句都跑不到；
+        // 这种情况交给脚本自己的 USE 决定目标库
+        if !database.is_empty() {
+            use_database(&mut conn, database).await?;
+        }
 
         let statements = split_sql_statements(sql);
         if statements.is_empty() {

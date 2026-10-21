@@ -43,3 +43,17 @@ export function isFileBased(type) {
 export function isMongoLike(type) {
   return MONGO_LIKE.includes(type);
 }
+
+// 支持在连接上直接执行 CREATE DATABASE 的类型：
+// SQLite 是单文件库、MongoDB 的库由写入隐式创建、Oracle 建库不是一条 SQL，都不提供该入口
+export const CREATE_DB_TYPES = ['mysql', 'mariadb', 'postgres', 'postgresql', 'sqlserver', 'mssql'];
+
+/** 该类型是否支持「创建数据库」 */
+export function canCreateDatabase(type) {
+  return CREATE_DB_TYPES.includes(type);
+}
+
+/** 该类型是否支持「删除数据库」（与建库同一批，语法不同但入口一致） */
+export function canDropDatabase(type) {
+  return CREATE_DB_TYPES.includes(type);
+}

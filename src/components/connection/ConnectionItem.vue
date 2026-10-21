@@ -4,6 +4,7 @@ import { useConnectionStore } from '@/stores/connection';
 import { useUiStore } from '@/stores/ui';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import ItemIcon from '@/components/common/ItemIcon.vue';
+import { canCreateDatabase, canDropDatabase } from '@/utils/dbType';
 
 const props = defineProps({
   conn: { type: Object, required: true }
@@ -31,15 +32,29 @@ function onItemClick() {
 const menuVisible = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
+// 右键点在哪个库上：删库时直接用它，弹窗里不用再选一次
+const contextDb = ref('');
 
-// 只有已打开（有 tab）的那条才给「断开连接」
+// 只有已打开（有 tab）的那条才给「断开连接」；支持建库/删库的类型才给对应菜单
 const menuItems = computed(() => {
-  const items = [{ label: '编辑', value: 'edit' }, { label: '删除', value: 'remove', danger: true }];
+  const items = [{ label: '编辑', value: 'edit' }];
+  if (canCreateDatabase(props.conn.type)) items.push({ label: '创建数据库', value: 'create-db' });
+  if (canDropDatabase(props.conn.type)) items.push({ label: '删除数据库', value: 'drop-db' });
+  items.push({ label: '删除连接', value: 'remove', danger: true });
   if (connStore.isOpen(props.conn.id)) items.push({ label: '断开连接', value: 'disconnect', danger: true });
   return items;
 });
 
 function onContextMenu(e) {
+  // 在连接卡片空白处右键：没有指定库，删库时仍由弹窗选择
+  contextDb.value = '';
+  menuX.value = e.clientX;
+  menuY.value = e.clientY;
+  menuVisible.value = true;
+}
+
+function onDbContextMenu(e, db) {
+  contextDb.value = db;
   menuX.value = e.clientX;
   menuY.value = e.clientY;
   menuVisible.value = true;
@@ -50,6 +65,24 @@ async function onMenuSelect(item) {
   const val = item && item.value;
   if (val === 'edit') {
     ui.openConnectionModal(props.conn);
+  } else if (val === 'create-db') {
+    // 建库要落在已建立的连接上：还没打开就按「点击卡片」的方式先连上（失败时 openConnection 已提示）
+    try {
+      if (!connStore.isOpen(props.conn.id)) await connStore.openConnection(props.conn.id);
+    } catch (e) {
+      return;
+    }
+    collapsed.value = false;
+    ui.openCreateDbModal(props.conn);
+  } else if (val === 'drop-db') {
+    // 删库同样要先有连接与库列表，弹窗里的候选就来自这条连接的 databaseList
+    try {
+      if (!connStore.isOpen(props.conn.id)) await connStore.openConnection(props.conn.id);
+    } catch (e) {
+      return;
+    }
+    collapsed.value = false;
+    ui.openDropDbModal(props.conn, contextDb.value);
   } else if (val === 'remove') {
     const ok = await ui.askConfirm({
       title: '删除连接',
@@ -72,6 +105,7 @@ async function onMenuSelect(item) {
     @contextmenu.prevent="onContextMenu"
   >
     <div class="connection-head">
+      <span class="conn-drag-handle" v-tip="'按住拖动可调整连接顺序'">⠿</span>
       <span class="connection-name">{{ conn.name }}</span>
       <span class="conn-tag">
         <ItemIcon :name="conn.type" />
@@ -91,6 +125,7 @@ async function onMenuSelect(item) {
         class="database-item"
         :class="{ active: db === connStore.currentDatabase }"
         @click.stop="connStore.selectDatabase(db)"
+        @contextmenu.stop.prevent="onDbContextMenu($event, db)"
       >
         <ItemIcon name="database" />
         <span class="item-label">{{ isRedis ? 'DB ' + db : db }}</span>

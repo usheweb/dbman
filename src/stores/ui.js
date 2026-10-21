@@ -26,6 +26,8 @@ export const useUiStore = defineStore('ui', () => {
     aiConfigModal: false,
     viewSettingsModal: false,
     aboutModal: false,
+    createDbModal: false,
+    dropDbModal: false,
     promoModal: false
   });
 
@@ -73,6 +75,14 @@ export const useUiStore = defineStore('ui', () => {
 
   // 连接弹窗：非空表示正在编辑已有连接，否则为新建
   const connModalTarget = ref(null);
+
+  // 创建数据库弹窗：非空表示在哪个连接上建库
+  const createDbTarget = ref(null);
+
+  // 删除数据库弹窗：非空表示在哪个连接上删库
+  const dropDbTarget = ref(null);
+  // 在某个具体的库上右键进入时，它就是删除目标，弹窗里不用再选一次
+  const dropDbPreset = ref('');
 
   // 导出选项（表头方式 / 导出范围），持久化
   const exportOpts = ref({ header: 'both', scope: 'page' });
@@ -166,6 +176,17 @@ export const useUiStore = defineStore('ui', () => {
     openModal('connectionModal');
   }
 
+  function openCreateDbModal(conn) {
+    createDbTarget.value = conn || null;
+    openModal('createDbModal');
+  }
+
+  function openDropDbModal(conn, presetDb) {
+    dropDbTarget.value = conn || null;
+    dropDbPreset.value = presetDb || '';
+    openModal('dropDbModal');
+  }
+
   return {
     panelState,
     modals,
@@ -174,6 +195,9 @@ export const useUiStore = defineStore('ui', () => {
     exportOpts,
     contentValue,
     connModalTarget,
+    createDbTarget,
+    dropDbTarget,
+    dropDbPreset,
     tableSort,
     viewOpts,
     resultFullscreen,
@@ -192,6 +216,8 @@ export const useUiStore = defineStore('ui', () => {
     saveTableSort,
     saveViewOpts,
     openContent,
-    openConnectionModal
+    openConnectionModal,
+    openCreateDbModal,
+    openDropDbModal
   };
 });

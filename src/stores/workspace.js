@@ -640,7 +640,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           count = 1;
         }
       }
-      if (count > 1) return runMultiStatements(sql, tabId, db, connData);
+      if (count > 1) return runMultiStatements(sql, tabId, db, connData, connId);
     }
     lastSql.value = sql;
     columnModes.value = {}; // 新一次查询：清空单列覆盖
@@ -666,6 +666,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       pushHistory(sql, connId, db, src);
       addSqlLog(sql, { success: true, elapsed, rows: src.pageInfo.rows }, connData, db);
+      // 单条 USE / 建删库 / 建删表之后，左侧列表不会自己更新，按执行内容补齐
+      syncAfterExec([sql], connId);
       return true;
     } catch (err) {
       const msg = err.message;
@@ -687,7 +689,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   // 多语句脚本：逐条执行并把结果列表落到结果区（phpMyAdmin 风格的执行反馈）
-  async function runMultiStatements(sql, tabId, db, connData) {
+  async function runMultiStatements(sql, tabId, db, connData, connId) {
     lastSql.value = sql;
     columnModes.value = {}; // 新一次执行：清空单列覆盖
     resetFindState();
@@ -722,6 +724,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         success: !failed, elapsed, rows: list.length,
         error: failed ? failed.error : ''
       }, connData, db);
+      // 脚本里的 USE / 建删库 / 建删表结果都反映到左侧列表；失败前已成功的语句同样算数
+      syncAfterExec(list.filter(r => r.status === 'success').map(r => r.sql), connId);
       if (failed) {
         ui.showToast(`第 ${list.indexOf(failed) + 1} 条执行失败：${failed.error}`, 'error');
       } else {
@@ -734,6 +738,59 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return false;
     } finally {
       loading.value = false;
+    }
+  }
+
+  // ===== 执行后同步左侧结构 =====
+  // USE / CREATE DATABASE / DROP DATABASE，或者建删表之后，左侧的库、表列表不会自己更新。
+  // 这里按执行成功的语句推断最终落在哪个库、结构有没有变化，把界面跟数据库对齐，
+  // 避免出现「表已经建好了，但左边的库和表列表里找不到」的困惑。
+  function stripLeadingComments(text) {
+    return String(text || '')
+      .replace(/^(?:\s*(?:--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/))*/, '')
+      .trim();
+  }
+
+  function usedDatabase(sql) {
+    const m = /^USE\s+(?:`([^`]+)`|"([^"]+)"|\[([^\]]+)\]|([^\s;]+))/i.exec(stripLeadingComments(sql));
+    return m ? (m[1] || m[2] || m[3] || m[4] || '') : '';
+  }
+
+  async function syncAfterExec(stmts, connId) {
+    if (!connId) return;
+    const target = conn.connections.find(c => c.id === connId);
+    if (!target) return;
+    const type = String(target.type || '').toLowerCase();
+    if (isMongoLike(type) || type === 'redis') return;
+    let useDb = '';
+    let dbChanged = false;
+    let tableChanged = false;
+    (stmts || []).forEach(s => {
+      const head = stripLeadingComments(s);
+      const u = usedDatabase(head);
+      if (u) useDb = u;
+      if (/^(?:CREATE|DROP|ALTER|RENAME)\s+(?:DATABASE|SCHEMA)\b/i.test(head)) dbChanged = true;
+      if (/^(?:CREATE|DROP|ALTER|RENAME|TRUNCATE)\s+(?:TEMPORARY\s+)?TABLE\b/i.test(head)) tableChanged = true;
+    });
+    try {
+      // 建库 / 删库后库列表必须重拉，否则新库在左侧根本不出现
+      if (dbChanged) await conn.loadMySQLDatabasesFor(connId);
+      // 脚本最后 USE 到哪个库，左侧就切到哪个库（切库本身会拉表列表）
+      let switched = false;
+      if (useDb && useDb !== conn.connectionDatabases[connId]) {
+        await conn.selectDatabaseFor(connId, useDb);
+        switched = true;
+      }
+      // 建表 / 删表 / 改表 / 重命名表后必须重拉表列表。
+      // 之前只在「脚本里没有 USE」时刷新，而实际脚本几乎都带 USE，
+      // 且 USE 的正是当前库时也不会切库，于是表建好了左边依然是空的
+      if (tableChanged && !switched) {
+        const db = conn.connectionDatabases[connId];
+        if (db) await conn.loadTablesFor(connId, db);
+      }
+    } catch (e) {
+      // 左侧同步失败不影响执行结果展示，下次手动刷新会自然恢复
+      console.warn('[dbman] 执行后同步左侧列表失败', e);
     }
   }
 

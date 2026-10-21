@@ -111,6 +111,16 @@ export const useConnectionStore = defineStore('connection', () => {
     if (s) s.connData = connData;
   }
 
+  // 连接列表拖拽排序：拖拽过程中 DOM 已经排好序，松手时把整个顺序按 id 写回并持久化
+  function applyConnectionOrder(ids) {
+    const map = new Map(connections.value.map(c => [c.id, c]));
+    const list = ids.map(id => map.get(id)).filter(Boolean);
+    // 顺序必须完整覆盖所有连接，否则视为无效（避免中途增删导致丢条目）
+    if (!list.length || list.length !== connections.value.length) return;
+    connections.value = list;
+    saveConnections();
+  }
+
   function removeConnection(connId) {
     if (sessions.value[connId]) closeTab(connId);
     connections.value = connections.value.filter(c => c.id !== connId);
@@ -362,6 +372,31 @@ export const useConnectionStore = defineStore('connection', () => {
     return loadMySQLDatabasesFor(activeId.value);
   }
 
+  // 创建数据库：执行 CREATE DATABASE 后刷新库列表，新库立刻出现在连接卡片下。
+  // 这条管理语句不进 SQL 工作区，也不写执行历史
+  async function createDatabaseFor(connId, sql) {
+    const s = sessions.value[connId];
+    if (!s || !s.serverConnId) throw new Error('连接尚未打开，请先打开该连接');
+    await withRetryFor(s, id => api.dbQuery(id, sql, null, 0, 0));
+    await loadMySQLDatabasesFor(connId);
+  }
+
+  // 删除数据库：DROP DATABASE 后刷新库列表；删的正是当前选中的库时顺手清空选中态与表缓存，
+  // 避免左侧还在展示一张已经不存在的库
+  async function dropDatabaseFor(connId, sql, dbName) {
+    const s = sessions.value[connId];
+    if (!s || !s.serverConnId) throw new Error('连接尚未打开，请先打开该连接');
+    await withRetryFor(s, id => api.dbQuery(id, sql, null, 0, 0));
+    if (s.database === dbName) {
+      s.database = null;
+      s.table = null;
+      s.allTables = [];
+      s.tableColumns = {};
+      s.triedColumns = {};
+    }
+    await loadMySQLDatabasesFor(connId);
+  }
+
   // Redis 的逻辑库：按 CONFIG GET databases 拿到的数量列出 DB 0 ~ n-1。
   // 连接本身就是按配置里的 db 建立的，这里先把选中的库同步成「记忆里的库 / 配置里的库」
   async function loadRedisDatabasesFor(connId) {
@@ -494,6 +529,7 @@ export const useConnectionStore = defineStore('connection', () => {
     saveConnectionDatabase,
     upsertConnection,
     removeConnection,
+    applyConnectionOrder,
     newConnectionId,
     isOpen,
     loadSecretsFor,
@@ -510,8 +546,13 @@ export const useConnectionStore = defineStore('connection', () => {
     testConnection,
     disconnect,
     loadMySQLDatabases,
+    loadMySQLDatabasesFor,
+    createDatabaseFor,
+    dropDatabaseFor,
     selectDatabase,
+    selectDatabaseFor,
     loadTables,
+    loadTablesFor,
     countTableRows,
     loadColumns
   };

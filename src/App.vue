@@ -33,6 +33,8 @@ import CsvImportModal from '@/components/modals/CsvImportModal.vue';
 import ResultConfirmModal from '@/components/modals/ResultConfirmModal.vue';
 import IdentifierSuggestModal from '@/components/modals/IdentifierSuggestModal.vue';
 import CellEditModal from '@/components/modals/CellEditModal.vue';
+import CreateDatabaseModal from '@/components/modals/CreateDatabaseModal.vue';
+import DropDatabaseModal from '@/components/modals/DropDatabaseModal.vue';
 import ResultSqlPanel from '@/components/modals/ResultSqlPanel.vue';
 import PromoModal from '@/components/modals/PromoModal.vue';
 import ToastHost from '@/components/common/ToastHost.vue';
@@ -195,6 +197,8 @@ onBeforeUnmount(() => {
   <ResultConfirmModal />
   <IdentifierSuggestModal />
   <CellEditModal />
+  <CreateDatabaseModal />
+  <DropDatabaseModal />
   <ResultSqlPanel />
   <PromoModal :visible="ui.modals.promoModal" @close="ui.closeModal('promoModal')" />
   <ContextMenu
