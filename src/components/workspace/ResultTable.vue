@@ -3,6 +3,8 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useUiStore } from '@/stores/ui';
+import { useConnectionStore } from '@/stores/connection';
+import { isRelational } from '@/utils/dbType';
 import { rawText } from '@/utils/format';
 import { splitTopLevelClauses } from '@/utils/sql';
 import ContextMenu from '@/components/common/ContextMenu.vue';
@@ -10,6 +12,13 @@ import ResultStatements from './ResultStatements.vue';
 
 const ws = useWorkspaceStore();
 const ui = useUiStore();
+const connStore = useConnectionStore();
+
+// 只有关系型库的编辑器里是 SQL；MongoDB / Redis 复用了同一个结果表，但没有 WHERE 可写
+const canInsertCondition = computed(() => {
+  const t = connStore.currentConnData && connStore.currentConnData.type;
+  return t ? isRelational(String(t).toLowerCase()) : false;
+});
 
 const rootEl = ref(null);
 const menu = ref({ visible: false, x: 0, y: 0, items: [], target: '', value: '', r: -1, c: -1 });
@@ -397,7 +406,7 @@ function rowHeadItems() {
 }
 
 function cellItems() {
-  return [
+  const items = [
     { label: '复制', value: 'copy' },
     { label: '查看内容', value: 'view' },
     { label: '编辑内容', value: 'edit' },
@@ -407,10 +416,14 @@ function cellItems() {
     { separator: true },
     { label: '复制为表格数据（Tab 分隔）', value: 'copy-tsv' },
     { label: '复制为 Insert 语句', value: 'copy-insert' },
-    { label: '复制为 Update 语句', value: 'copy-update' },
-    { separator: true },
-    { label: '删除记录', value: 'delete-rows', danger: true }
+    { label: '复制为 Update 语句', value: 'copy-update' }
   ];
+  // MongoDB / Redis 的「编辑器」不是 SQL，没有 WHERE 可写，不显示该项
+  if (canInsertCondition.value) {
+    items.push({ separator: true }, { label: '以此值插入查询条件', value: 'insert-cond' });
+  }
+  items.push({ separator: true }, { label: '删除记录', value: 'delete-rows', danger: true });
+  return items;
 }
 
 function showCellMenu(e, r, c, value) {
@@ -472,6 +485,9 @@ function onMenuSelect(item) {
   } else if (val === 'insert-col') {
     ws.insertAtEditorCursor(col);
     ui.showToast(`已插入列名 ${col}`, 'success');
+  } else if (val === 'insert-cond') {
+    const cellCol = columns.value[mc];
+    if (cellCol) ws.insertFilterCondition(cellCol, mr);
   } else if (val === 'clear-where') {
     ws.clearResultFilter();
   } else if (val === 'set-empty' || val === 'set-null') {

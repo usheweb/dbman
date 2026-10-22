@@ -1108,6 +1108,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ui.showToast('已清除筛选条件', 'success');
   }
 
+  // 结果单元格右键：把「这一列 = 这个值」追加到编辑器 SQL 的 WHERE。
+  // 只写回编辑器、不自动执行，用户还能接着改其他条件。
+  function insertFilterCondition(col, r) {
+    const rows = (lastResult.value && lastResult.value.data) || [];
+    const raw = rows[r] ? rows[r][col] : undefined;
+    const cond = raw === null || raw === undefined
+      ? `${sqlIdent(col)} IS NULL`
+      : `${sqlIdent(col)} = ${sqlLiteralFor(col, rawText(raw), rows)}`;
+    const parsed = splitTopLevelClauses(getSql());
+    // 原条件可能含 OR，整体加括号再 AND，避免改变原有语义
+    const where = parsed && parsed.where ? `(${parsed.where}) AND ${cond}` : cond;
+    const sql = rewriteEditorSql({ hasWhere: true, where });
+    if (!sql) return false;
+    setSql(sql);
+    ui.showToast(`已插入查询条件：${cond}`, 'success');
+    return true;
+  }
+
   // 打开筛选弹窗：编辑器 SQL 里已有 WHERE 时优先带入，避免「应用」把原条件覆盖掉
   function openFilterDialog(col) {
     const parsed = splitTopLevelClauses(getSql());
@@ -1856,7 +1874,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     rowHit, cellHit, recomputeMatches,
     executeQuery, executeSqlText, execBusy, refreshResult, reloadPage, gotoPage, changePageSize,
     askExecConfirm, resolveExecConfirm,
-    rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter,
+    rewriteEditorSql, sortResultBy, clearResultSort, clearResultFilter, insertFilterCondition,
     resultSort, syncResultSort, toggleSort,
     openFilterDialog, closeFilterDialog, applyFilter,
     applyFind, toggleFindOnly, clearFind, resetFindState,
